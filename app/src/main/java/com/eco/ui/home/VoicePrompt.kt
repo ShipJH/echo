@@ -1,12 +1,12 @@
 package com.eco.ui.home
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -22,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.eco.ui.theme.EchoAccent
-import com.eco.ui.theme.EchoBorder
 import com.eco.ui.theme.EchoMuted
 import com.eco.ui.theme.EchoText
 
@@ -31,9 +30,8 @@ fun VoicePrompt(modifier: Modifier = Modifier, compact: Boolean = false) {
     var previewListening by remember { mutableStateOf(false) }
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         androidx.compose.foundation.layout.Box(
-            modifier = Modifier.size(if (compact) 88.dp else 108.dp).clip(CircleShape)
+            modifier = Modifier.offset(y = (-12).dp).size(if (compact) 88.dp else 108.dp).clip(CircleShape)
                 .background(EchoAccent.copy(alpha = if (previewListening) 0.34f else 0.22f))
-                .border(1.dp, EchoAccent.copy(alpha = 0.58f), CircleShape)
                 .clickable { previewListening = !previewListening },
             contentAlignment = Alignment.Center,
         ) {

@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -102,19 +105,45 @@ fun ScheduleCard(modifier: Modifier = Modifier, compact: Boolean = false) {
             }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth().height(if (compact) 84.dp else 110.dp),
         ) {
-            CircleControl(label = "−", enabled = amount > 1, compact = compact) {
-                sliderValue = (amount - 1).coerceAtLeast(1).toFloat()
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("$amount${unit.label} 뒤", color = EchoAccent, fontSize = if (compact) 42.sp else 52.sp, fontWeight = FontWeight.Bold)
-            }
-            CircleControl(label = "+", enabled = amount < maxAmount, compact = compact) {
-                sliderValue = (amount + 1).coerceAtMost(maxAmount).toFloat()
+            val centerSlotWidth = if (compact) 230.dp else 320.dp
+            val sideSlotWidth = ((maxWidth - centerSlotWidth) / 2).coerceAtLeast(0.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Box(
+                    modifier = Modifier.width(sideSlotWidth),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircleControl(label = "−", enabled = amount > 1, compact = compact) {
+                        sliderValue = (amount - 1).coerceAtLeast(1).toFloat()
+                    }
+                }
+                Box(
+                    modifier = Modifier.width(centerSlotWidth),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "$amount${unit.label} 뒤",
+                        color = EchoAccent,
+                        fontSize = if (compact) 42.sp else 52.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                    )
+                }
+                Box(
+                    modifier = Modifier.width(sideSlotWidth),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircleControl(label = "+", enabled = amount < maxAmount, compact = compact) {
+                        sliderValue = (amount + 1).coerceAtMost(maxAmount).toFloat()
+                    }
+                }
             }
         }
 
