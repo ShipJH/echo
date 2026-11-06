@@ -24,8 +24,8 @@ fun EchoHeader(modifier: Modifier = Modifier) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             Text("▥", color = EchoAccent, fontSize = 24.sp)
-            Text("ECHO", color = EchoText, fontSize = 21.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+            Text("에코", color = EchoText, fontSize = 21.sp, fontWeight = FontWeight.Bold)
         }
-        Text("차량 디스플레이 에디션", color = EchoMuted, fontSize = 15.sp)
+        Text("우리들의 타임캡슐", color = EchoMuted, fontSize = 15.sp)
     }
 }

@@ -3,6 +3,8 @@ package com.eco.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,18 +23,18 @@ import com.eco.ui.theme.EchoTrack
 fun TopTabs(selected: Int, onSelect: (Int) -> Unit) {
     Row(
         modifier = Modifier.padding(start = 22.dp, end = 22.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         listOf("타임캡슐 만들기", "내 타임캡슐").forEachIndexed { index, label ->
-            androidx.compose.foundation.layout.Box(
+            Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.clip(RoundedCornerShape(30.dp))
+                modifier = Modifier.weight(1f).heightIn(min = 64.dp).clip(RoundedCornerShape(30.dp))
                     .background(if (selected == index) EchoTrack else androidx.compose.ui.graphics.Color.Transparent)
                     .clickable { onSelect(index) }
-                    .padding(horizontal = 22.dp, vertical = 11.dp),
+                    .padding(horizontal = 28.dp, vertical = 12.dp),
             ) {
-                Text(text = label, color = if (selected == index) EchoText else EchoMuted, fontSize = 16.sp)
+                Text(text = label, color = if (selected == index) EchoText else EchoMuted, fontSize = 30.sp)
             }
         }
     }
