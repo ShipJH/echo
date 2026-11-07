@@ -51,6 +51,7 @@ fun CapsuleListScreen(onCreate: () -> Unit) {
                 Text(
                     label,
                     color = if (filter == index) EchoText else EchoMuted,
+                    fontSize = 28.sp,
                     modifier = Modifier.clip(RoundedCornerShape(24.dp))
                         .background(if (filter == index) EchoSurface else androidx.compose.ui.graphics.Color.Transparent)
                         .clickable { filter = index }
@@ -70,10 +71,10 @@ fun CapsuleListScreen(onCreate: () -> Unit) {
                             .clip(RoundedCornerShape(16.dp)).background(EchoSurface).padding(18.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(if (capsule.sealed) "◈" else "▶", color = EchoAccent, fontSize = 22.sp)
+                        Text(if (capsule.sealed) "◈" else "▶", color = EchoAccent, fontSize = 30.sp)
                         Column(modifier = Modifier.padding(start = 14.dp)) {
-                            Text(capsule.title, color = EchoText, fontSize = 15.sp)
-                            Text(if (capsule.sealed) "${capsule.date} 공개 예정" else "${capsule.date} 공개됨", color = EchoMuted, fontSize = 12.sp)
+                            Text(capsule.title, color = EchoText, fontSize = 30.sp)
+                            Text(if (capsule.sealed) "${capsule.date} 공개 예정" else "${capsule.date} 공개됨", color = EchoMuted, fontSize = 26.sp)
                         }
                     }
                 }
@@ -84,7 +85,7 @@ fun CapsuleListScreen(onCreate: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text(if (filter == 0) "봉인 중인 타임캡슐이 없어요" else "공개된 타임캡슐이 없어요", color = EchoMuted, fontSize = 15.sp)
+                Text(if (filter == 0) "봉인 중인 타임캡슐이 없어요" else "공개된 타임캡슐이 없어요", color = EchoMuted, fontSize = 26.sp)
             }
         }
     }
