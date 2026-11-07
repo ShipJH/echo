@@ -11,6 +11,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -334,7 +336,8 @@ fun VoicePrompt(modifier: Modifier = Modifier, compact: Boolean = false, onRecor
             Column(
                 modifier = Modifier.fillMaxWidth(0.90f).clip(RoundedCornerShape(32.dp))
                     .background(Brush.verticalGradient(listOf(EchoSurface, EchoBackground)))
-                    .padding(horizontal = 36.dp, vertical = 34.dp),
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = if (compact) 18.dp else 34.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 20.dp),
             ) {
@@ -356,11 +359,11 @@ fun VoicePrompt(modifier: Modifier = Modifier, compact: Boolean = false, onRecor
                 } else {
                     Text("녹음이 완료되었어요.", color = EchoText, fontSize = if (compact) 30.sp else 38.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                     Waveform(bars, Modifier.fillMaxWidth().height(if (compact) 120.dp else 170.dp).padding(horizontal = 12.dp))
-                    Text("음성 명령 준비 중 · 아래 버튼으로 선택해 주세요", color = EchoMuted, fontSize = if (compact) 18.sp else 22.sp, maxLines = 1, textAlign = TextAlign.Center)
+                    Text("음성 명령 준비 중 · 아래 버튼으로 선택해 주세요", color = EchoMuted, fontSize = if (compact) 26.sp else 32.sp, textAlign = TextAlign.Center, lineHeight = if (compact) 34.sp else 40.sp)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         VoiceCommand("“에코야, 녹음 저장해줘”", compact)
-                        ActionButton("저장", false, !busy, Modifier.fillMaxWidth()) { audioAction {
+                        ActionButton("저장", false, !busy, Modifier.fillMaxWidth(), large = true) { audioAction {
                             if (stage == RecordingStage.REVIEW_PLAYING) {
                                 stopPlayback()
                                 stage = RecordingStage.REVIEW
@@ -380,7 +383,7 @@ fun VoicePrompt(modifier: Modifier = Modifier, compact: Boolean = false, onRecor
                         }
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         VoiceCommand("“에코야, 녹음 들려줘”", compact)
-                        ActionButton(if (stage == RecordingStage.REVIEW_PLAYING) "멈춤" else "들어보기", false, !busy, Modifier.fillMaxWidth()) { audioAction {
+                        ActionButton(if (stage == RecordingStage.REVIEW_PLAYING) "멈춤" else "들어보기", false, !busy, Modifier.fillMaxWidth(), large = true) { audioAction {
                             if (stage == RecordingStage.REVIEW_PLAYING) {
                                 stopPlayback()
                                 stage = RecordingStage.REVIEW
@@ -412,7 +415,7 @@ fun VoicePrompt(modifier: Modifier = Modifier, compact: Boolean = false, onRecor
                         }
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         VoiceCommand("“에코야, 녹음 취소해줘”", compact)
-                        ActionButton("취소", false, !busy, Modifier.fillMaxWidth()) { audioAction {
+                        ActionButton("취소", false, !busy, Modifier.fillMaxWidth(), large = true) { audioAction {
                             if (stage == RecordingStage.REVIEW_PLAYING) stopPlayback()
                             tempFile?.delete()
                             tempFile = null
@@ -431,8 +434,8 @@ private fun formatDuration(value: Int): String = "00:${value.toString().padStart
 
 @Composable
 private fun VoiceCommand(text: String, compact: Boolean) {
-    Text(text, modifier = Modifier.fillMaxWidth(), color = EchoText, fontSize = if (compact) 20.sp else 24.sp,
-        textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(text, modifier = Modifier.fillMaxWidth(), color = EchoText, fontSize = if (compact) 26.sp else 30.sp,
+        lineHeight = if (compact) 34.sp else 38.sp, textAlign = TextAlign.Center)
 }
 
 private fun extractWaveform(file: File, bucketCount: Int): List<Float> {
@@ -462,15 +465,15 @@ private fun extractWaveform(file: File, bucketCount: Int): List<Float> {
 }
 
 @Composable
-private fun ActionButton(label: String, primary: Boolean, enabled: Boolean = true, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun ActionButton(label: String, primary: Boolean, enabled: Boolean = true, modifier: Modifier = Modifier, large: Boolean = false, onClick: () -> Unit) {
     Box(
-        modifier = modifier.height(64.dp).clip(RoundedCornerShape(22.dp))
+        modifier = modifier.height(if (large) 86.dp else 64.dp).clip(RoundedCornerShape(22.dp))
             .background(if (primary) EchoAccent else EchoSurface)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (primary) EchoSurface else EchoText, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+        Text(label, color = if (primary) EchoSurface else EchoText, fontSize = if (large) 30.sp else 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
     }
 }
 
