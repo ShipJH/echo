@@ -56,9 +56,9 @@ private enum class PeriodUnit(val label: String) {
 }
 
 @Composable
-fun ScheduleCard(modifier: Modifier = Modifier, compact: Boolean = false) {
-    var unit by remember { mutableStateOf(PeriodUnit.YEARS) }
-    var sliderValue by remember { mutableFloatStateOf(3f) }
+fun ScheduleCard(modifier: Modifier = Modifier, compact: Boolean = false, onDateChanged: (LocalDate) -> Unit = {}) {
+    var unit by remember { mutableStateOf(PeriodUnit.MONTHS) }
+    var sliderValue by remember { mutableFloatStateOf(6f) }
     val maxAmount = when (unit) {
         PeriodUnit.DAYS -> 365
         PeriodUnit.MONTHS -> 12
@@ -71,6 +71,7 @@ fun ScheduleCard(modifier: Modifier = Modifier, compact: Boolean = false) {
         PeriodUnit.MONTHS -> today.plusMonths(amount.toLong())
         PeriodUnit.YEARS -> today.plusYears(amount.toLong())
     }
+    androidx.compose.runtime.SideEffect { onDateChanged(unlockDate) }
 
     Column(
         modifier = modifier.clip(RoundedCornerShape(18.dp)).background(EchoSurface)
