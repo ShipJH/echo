@@ -109,7 +109,7 @@ fun ScheduleCard(modifier: Modifier = Modifier, compact: Boolean = false, onDate
         BoxWithConstraints(
             modifier = Modifier.fillMaxWidth().height(if (compact) 84.dp else 110.dp),
         ) {
-            val centerSlotWidth = if (compact) 230.dp else 320.dp
+            val centerSlotWidth = (if (compact) 230.dp else 320.dp).coerceAtMost((maxWidth - 112.dp).coerceAtLeast(0.dp))
             val sideSlotWidth = ((maxWidth - centerSlotWidth) / 2).coerceAtLeast(0.dp)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -171,7 +171,7 @@ fun ScheduleCard(modifier: Modifier = Modifier, compact: Boolean = false, onDate
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
             quickPicks.forEach { value ->
-                QuickPick("$value${unit.label}", selected = amount == value, compact = compact) {
+                QuickPick("$value${unit.label}", selected = amount == value, compact = compact, modifier = Modifier.weight(1f)) {
                     sliderValue = value.toFloat()
                 }
             }
@@ -276,14 +276,15 @@ private fun CircleControl(label: String, enabled: Boolean, compact: Boolean, onC
 }
 
 @Composable
-private fun QuickPick(text: String, selected: Boolean, compact: Boolean, onClick: () -> Unit) {
+private fun QuickPick(text: String, selected: Boolean, compact: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Text(
         text = text,
         color = if (selected) EchoText else EchoMuted,
-        fontSize = if (compact) 18.sp else 22.sp,
-        modifier = Modifier.padding(horizontal = 5.dp).clip(RoundedCornerShape(24.dp))
+        fontSize = if (compact) 20.sp else 24.sp,
+        textAlign = TextAlign.Center,
+        modifier = modifier.padding(horizontal = 2.dp).clip(RoundedCornerShape(24.dp))
             .background(if (selected) EchoBackground else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = if (compact) 11.dp else 14.dp),
+            .padding(horizontal = 4.dp, vertical = if (compact) 11.dp else 14.dp),
     )
 }

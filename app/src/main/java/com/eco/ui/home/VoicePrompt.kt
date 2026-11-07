@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -47,6 +48,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import com.eco.ui.theme.EchoAccent
 import com.eco.ui.theme.EchoBackground
@@ -324,11 +327,12 @@ fun VoicePrompt(modifier: Modifier = Modifier, compact: Boolean = false, onRecor
         }
         message?.let {
             Spacer(Modifier.height(8.dp))
-            Text(it, color = EchoMuted, fontSize = if (compact) 16.sp else 20.sp)
+            Text(it, color = EchoMuted, fontSize = 20.sp, lineHeight = 28.sp)
         }
     }
 
     if (stage == RecordingStage.RECORDING || stage == RecordingStage.REVIEW || stage == RecordingStage.REVIEW_PLAYING) {
+        Dialog(onDismissRequest = {}, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(
             modifier = Modifier.fillMaxSize().background(Color(0xCC071018)),
             contentAlignment = Alignment.Center,
@@ -357,7 +361,7 @@ fun VoicePrompt(modifier: Modifier = Modifier, compact: Boolean = false, onRecor
                     }
                     Text("마이크를 누르면 녹음이 끝나요", color = EchoText, fontSize = 23.sp)
                 } else {
-                    Text("녹음이 완료되었어요.", color = EchoText, fontSize = if (compact) 30.sp else 38.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                    Text("녹음이 완료되었어요.", color = EchoText, fontSize = if (compact) 30.sp else 38.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                     Waveform(bars, Modifier.fillMaxWidth().height(if (compact) 120.dp else 170.dp).padding(horizontal = 12.dp))
                     Text("음성 명령 준비 중 · 아래 버튼으로 선택해 주세요", color = EchoMuted, fontSize = if (compact) 26.sp else 32.sp, textAlign = TextAlign.Center, lineHeight = if (compact) 34.sp else 40.sp)
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -427,6 +431,7 @@ fun VoicePrompt(modifier: Modifier = Modifier, compact: Boolean = false, onRecor
                 }
             }
         }
+        }
     }
 }
 
@@ -434,7 +439,7 @@ private fun formatDuration(value: Int): String = "00:${value.toString().padStart
 
 @Composable
 private fun VoiceCommand(text: String, compact: Boolean) {
-    Text(text, modifier = Modifier.fillMaxWidth(), color = EchoText, fontSize = if (compact) 26.sp else 30.sp,
+    Text(text, modifier = Modifier.fillMaxWidth().heightIn(min = if (compact) 68.dp else 76.dp), color = EchoText, fontSize = if (compact) 26.sp else 30.sp,
         lineHeight = if (compact) 34.sp else 38.sp, textAlign = TextAlign.Center)
 }
 

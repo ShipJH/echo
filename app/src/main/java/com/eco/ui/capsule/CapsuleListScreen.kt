@@ -5,6 +5,8 @@ import android.media.MediaPlayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -55,7 +57,7 @@ private fun loadCapsules(context: Context): List<CapsuleDto> {
 }
 
 @Composable
-fun CapsuleListScreen(onCreate: () -> Unit) {
+fun CapsuleListScreen(onCreate: () -> Unit, onSttTest: () -> Unit) {
     val context = LocalContext.current
     var filter by remember { mutableIntStateOf(0) }
     var capsules by remember { mutableStateOf(loadCapsules(context)) }
@@ -108,8 +110,8 @@ fun CapsuleListScreen(onCreate: () -> Unit) {
 
     Column(Modifier.fillMaxSize().background(EchoBackground)) {
         EchoHeader()
-        TopTabs(selected = 1, onSelect = { if (it == 0) onCreate() })
-        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        TopTabs(selected = 1, onSelect = { if (it == 0) onCreate() else if (it == 2) onSttTest() })
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).widthIn(min = 600.dp).padding(start = 24.dp, end = 24.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             listOf("봉인 중", "공개됨").forEachIndexed { index, label ->
                 Text(label, color = if (filter == index) EchoText else EchoMuted, fontSize = 28.sp,
                     modifier = Modifier.clip(RoundedCornerShape(24.dp))
