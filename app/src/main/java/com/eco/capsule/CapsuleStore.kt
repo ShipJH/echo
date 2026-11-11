@@ -23,7 +23,7 @@ class CapsuleStore(context: Context) {
             .map { file ->
                 val meta = prefs.getString(key(file.name), null)?.let(CapsuleCodec::decode)
                     ?: CapsuleCodec.Meta(UnlockCondition.Anytime)
-                Capsule(file.name, createdAt(file), wavDurationMs(file), meta.condition, meta.openedAt, meta.arrivedAt, meta.recordedPlace, meta.leftAt)
+                Capsule(file.name, createdAt(file), wavDurationMs(file), meta.condition, meta.openedAt, meta.arrivedAt, meta.recordedPlace, meta.leftAt, meta.transcript, meta.openedEarlyAt)
             }
             .sortedByDescending { it.createdAt }
     }
@@ -33,40 +33,37 @@ class CapsuleStore(context: Context) {
     /** 녹음 임시 파일을 보관함으로 옮긴다. 메타 저장에 실패하면 옮긴 파일을 되돌린다. */
     fun seal(recording: File, condition: UnlockCondition, recordedPlace: GeoPoint?): Capsule {
         val destination = File(dir, "echo-${System.currentTimeMillis()}.wav")
-        check(recording.renameTo(destination)) { "녹음 파일을 보관함으로 옮기지 못했습니다" }
+        check(recording.renameTo(destination)) { "녹음 파일을 옮기지 못했어요" }
         val written = prefs.edit().putString(key(destination.name), CapsuleCodec.encode(CapsuleCodec.Meta(condition, recordedPlace = recordedPlace))).commit()
         if (!written) {
             destination.renameTo(recording)
-            error("캡슐 정보를 저장하지 못했습니다")
+            error("녹음 정보를 저장하지 못했어요")
         }
         return load().first { it.fileName == destination.name }
     }
 
-    fun markOpened(capsule: Capsule, now: Long = System.currentTimeMillis()) =
-        update(capsule) { it.copy(openedAt = it.openedAt ?: now) }
+    fun markOpened(fileName: String, now: Long = System.currentTimeMillis()) =
+        update(fileName) { it.copy(openedAt = it.openedAt ?: now) }
+
+    fun setTranscript(fileName: String, text: String) = update(fileName) { it.copy(transcript = text) }
 
     /** 반경을 벗어났다. 이미 기록돼 있으면 그대로 둔다. */
-    fun markLeft(fileName: String, now: Long = System.currentTimeMillis()) {
-        val capsule = load().firstOrNull { it.fileName == fileName } ?: return
-        if (capsule.leftAt == null) update(capsule) { it.copy(leftAt = now) }
-    }
+    fun markLeft(fileName: String, now: Long = System.currentTimeMillis()) =
+        update(fileName) { if (it.leftAt == null) it.copy(leftAt = now) else it }
 
     /** 반경에 들어왔다. 한 번 떠난 뒤가 아니면 무시하고 false 를 돌려준다. */
     fun markArrived(fileName: String, now: Long = System.currentTimeMillis()): Boolean {
-        val capsule = load().firstOrNull { it.fileName == fileName } ?: return false
-        if (capsule.leftAt == null || capsule.arrivedAt != null) return false
-        update(capsule) { it.copy(arrivedAt = now) }
+        val meta = read(fileName) ?: return false
+        if (meta.leftAt == null || meta.arrivedAt != null) return false
+        update(fileName) { it.copy(arrivedAt = now) }
         return true
     }
 
-    /** 봉인 중인 기억을 지금 연다. 조건을 '조건 없이' 로 바꾸지 않고 충족 시각만 기록한다. */
-    fun openEarly(capsule: Capsule, today: LocalDate = LocalDate.now()) = update(capsule) {
-        when (val c = it.condition) {
-            is UnlockCondition.OnDate -> it.copy(condition = UnlockCondition.OnDate(minOf(c.date, today)))
-            is UnlockCondition.AtPlace -> it.copy(arrivedAt = it.arrivedAt ?: System.currentTimeMillis())
-            UnlockCondition.Anytime -> it
-        }
-    }
+    /**
+     * 잠긴 녹음을 지금 연다. 예전에는 날짜를 오늘로 덮어써 원래 정한 날이 사라졌다. 이제 연 시각만 따로 남긴다.
+     */
+    fun openEarly(fileName: String, now: Long = System.currentTimeMillis()) =
+        update(fileName) { it.copy(openedEarlyAt = it.openedEarlyAt ?: now) }
 
     /** 실패한 파일 이름을 돌려준다. */
     fun delete(fileNames: Collection<String>): List<String> {
@@ -81,9 +78,18 @@ class CapsuleStore(context: Context) {
         return failed
     }
 
-    private fun update(capsule: Capsule, change: (CapsuleCodec.Meta) -> CapsuleCodec.Meta) {
-        val current = CapsuleCodec.Meta(capsule.condition, capsule.openedAt, capsule.arrivedAt, capsule.recordedPlace, capsule.leftAt)
-        check(prefs.edit().putString(key(capsule.fileName), CapsuleCodec.encode(change(current))).commit()) { "캡슐 정보를 저장하지 못했습니다" }
+    private fun read(fileName: String): CapsuleCodec.Meta? =
+        prefs.getString(key(fileName), null)?.let(CapsuleCodec::decode)
+
+    /**
+     * 항상 저장된 최신 값에서 고친다. 화면이 들고 있는 Capsule 은 지오펜스 이탈(markLeft)처럼
+     * 화면을 다시 읽지 않는 갱신을 모르기 때문에, 그것으로 덮어쓰면 leftAt 이 지워진다(2026-11-11 리뷰).
+     */
+    private fun update(fileName: String, change: (CapsuleCodec.Meta) -> CapsuleCodec.Meta) {
+        val current = read(fileName) ?: CapsuleCodec.Meta(UnlockCondition.Anytime)
+        val next = change(current)
+        if (next == current) return
+        check(prefs.edit().putString(key(fileName), CapsuleCodec.encode(next)).commit()) { "녹음 정보를 저장하지 못했어요" }
     }
 
     /**

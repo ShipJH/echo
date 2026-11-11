@@ -19,6 +19,9 @@ class CapsuleTest {
             CapsuleCodec.Meta(UnlockCondition.OnDate(LocalDate.of(2029, 11, 4)), openedAt = 5L),
             CapsuleCodec.Meta(UnlockCondition.AtPlace(35.1587, 129.1604, 300f), arrivedAt = 9L, recordedPlace = seoulCityHall, leftAt = 7L),
             CapsuleCodec.Meta(UnlockCondition.Anytime),
+            CapsuleCodec.Meta(UnlockCondition.Anytime, transcript = "지우야; 기분=두근두근"),
+            CapsuleCodec.Meta(UnlockCondition.Anytime, transcript = ""),
+            CapsuleCodec.Meta(UnlockCondition.OnDate(LocalDate.of(2030, 1, 1)), openedEarlyAt = 3L),
         ).forEach { assertEquals(it, CapsuleCodec.decode(CapsuleCodec.encode(it))) }
     }
 
@@ -33,10 +36,23 @@ class CapsuleTest {
         assertFalse(c.copy(openedAt = 1).isWaiting(LocalDate.of(2027, 11, 12)))
     }
 
+    @Test fun openingEarlyKeepsTheOriginalDate() {
+        val c = capsule(UnlockCondition.OnDate(LocalDate.of(2030, 1, 1))).copy(openedEarlyAt = 1)
+        assertTrue(c.isUnlocked(LocalDate.of(2026, 11, 11)))
+        assertEquals(UnlockCondition.OnDate(LocalDate.of(2030, 1, 1)), c.condition)
+    }
+
     @Test fun placeOpensOnlyAfterArrival() {
         val c = capsule(UnlockCondition.AtPlace(35.1587, 129.1604, 300f))
         assertFalse(c.isUnlocked(LocalDate.MAX))
         assertTrue(c.copy(arrivedAt = 1).isUnlocked(LocalDate.MIN))
+    }
+
+    @Test fun transcriptStaysHiddenWhileLocked() {
+        val locked = capsule(UnlockCondition.OnDate(LocalDate.of(2027, 11, 11))).copy(transcript = "첫 바다")
+        assertEquals(null, locked.visibleTranscript(LocalDate.of(2027, 11, 10)))
+        assertEquals("첫 바다", locked.visibleTranscript(LocalDate.of(2027, 11, 11)))
+        assertEquals(null, capsule(UnlockCondition.Anytime).copy(transcript = "").visibleTranscript(LocalDate.MAX))
     }
 
     @Test fun anytimeIsOpenButNeverWaiting() {

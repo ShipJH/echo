@@ -1,6 +1,7 @@
 package com.eco.capsule
 
 import java.time.LocalDate
+import java.util.Base64
 
 /**
  * 한 캡슐의 메타데이터를 한 줄 문자열로 바꾼다. org.json 은 로컬 단위 테스트에서 동작하지
@@ -13,6 +14,8 @@ object CapsuleCodec {
         val arrivedAt: Long? = null,
         val recordedPlace: GeoPoint? = null,
         val leftAt: Long? = null,
+        val transcript: String? = null,
+        val openedEarlyAt: Long? = null,
     )
 
     fun encode(meta: Meta): String = buildList {
@@ -24,7 +27,10 @@ object CapsuleCodec {
         meta.openedAt?.let { add("opened=$it") }
         meta.arrivedAt?.let { add("arrived=$it") }
         meta.leftAt?.let { add("left=$it") }
+        meta.openedEarlyAt?.let { add("early=$it") }
         meta.recordedPlace?.let { add("recLat=${it.latitude}"); add("recLng=${it.longitude}") }
+        // 받아쓴 문장에는 ';' 와 '=' 가 들어갈 수 있어 Base64 로 감싼다.
+        meta.transcript?.let { add("text=" + Base64.getEncoder().encodeToString(it.toByteArray(Charsets.UTF_8))) }
     }.joinToString(";")
 
     fun decode(raw: String): Meta {
@@ -40,6 +46,7 @@ object CapsuleCodec {
             else -> error("알 수 없는 열림 조건: $type")
         }
         val recorded = fields["recLat"]?.let { GeoPoint(it.toDouble(), fields.getValue("recLng").toDouble()) }
-        return Meta(condition, fields["opened"]?.toLong(), fields["arrived"]?.toLong(), recorded, fields["left"]?.toLong())
+        val transcript = fields["text"]?.let { String(Base64.getDecoder().decode(it), Charsets.UTF_8) }
+        return Meta(condition, fields["opened"]?.toLong(), fields["arrived"]?.toLong(), recorded, fields["left"]?.toLong(), transcript, fields["early"]?.toLong())
     }
 }

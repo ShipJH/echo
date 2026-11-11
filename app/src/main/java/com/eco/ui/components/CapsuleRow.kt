@@ -14,29 +14,38 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.eco.capsule.Capsule
-import com.eco.capsule.UnlockCondition
-import com.eco.ui.format.conditionLabel
-import com.eco.ui.format.formatDuration
+import com.eco.ui.format.CapsuleStatus
+import com.eco.ui.format.durationWords
+import com.eco.ui.format.headline
+import com.eco.ui.format.status
+import com.eco.ui.format.statusLabel
 import com.eco.ui.format.timeOfDay
+import com.eco.ui.format.weekday
 import com.eco.ui.theme.Echo
 import com.eco.ui.theme.EchoType
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-/** 날짜 칸 · 내용 · 상태로 된 한 줄. 재생 중이면 아래에 진행 막대가 붙는다. */
+/**
+ * 날짜 칸 · 시각과 길이 · 상태로 된 한 줄. 상태는 아이콘과 짧은 말로 고정해 한눈에 갈리게 하고,
+ * 재생 버튼(▶)은 들을 수 있는 줄에만 둔다. 재생 중이면 아래에 진행 막대가 붙는다.
+ */
 @Composable
 fun CapsuleRow(
     capsule: Capsule,
@@ -48,13 +57,8 @@ fun CapsuleRow(
     checked: Boolean = false,
 ) {
     val c = Echo.colors
-    val open = capsule.isUnlocked(today)
-    val waiting = capsule.isWaiting(today)
-    val statusColor = when {
-        waiting -> c.accent
-        !open && capsule.condition is UnlockCondition.AtPlace -> c.state
-        else -> c.textSecondary
-    }
+    val status = capsule.status(today)
+    val locked = status == CapsuleStatus.LOCKED_DATE || status == CapsuleStatus.LOCKED_PLACE
     Column(Modifier.fillMaxWidth().background(if (playing) c.tile else c.background).clickable(role = Role.Button, onClick = onClick)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 120.dp).padding(horizontal = Gutter, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             if (selecting) {
@@ -63,34 +67,58 @@ fun CapsuleRow(
                 }
                 Spacer(Modifier.width(24.dp))
             }
+            val day = capsule.createdAt.toLocalDate()
             Column(Modifier.width(170.dp)) {
-                Text(capsule.createdAt.year.toString(), style = EchoType.caption, color = c.textSecondary)
-                Text(capsule.createdAt.format(DateTimeFormatter.ofPattern("MM.dd")), style = EchoType.title, color = c.text)
+                Text(day.format(DateTimeFormatter.ofPattern("MM.dd")), style = EchoType.title, color = c.text)
+                // 올해 녹음이면 연도 대신 요일. 모든 줄에 같은 연도가 반복되면 잡음이다.
+                Text(if (day.year == today.year) weekday(day) else day.year.toString(), style = EchoType.caption, color = c.textSecondary)
             }
+            // 잠긴 녹음은 받아쓴 내용이 있어도 보이지 않는다(visibleTranscript).
+            val spoken = capsule.visibleTranscript(today)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("${timeOfDay(capsule.createdAt)}에 남긴 기억", style = EchoType.body, color = c.text, maxLines = 1)
-                val meta = buildList {
-                    add(formatDuration(capsule.durationMs))
-                    if (capsule.recordedPlace != null) add("장소 기록됨")
-                    if (capsule.openedAt != null) add("들었음")
-                }.joinToString(" · ")
-                Text(meta, style = EchoType.caption, color = c.textSecondary, maxLines = 1)
+                Text(spoken?.let { "\u201C${headline(it)}\u201D" } ?: timeOfDay(capsule.createdAt), style = EchoType.body, color = c.text, maxLines = 1)
+                Text(listOfNotNull(timeOfDay(capsule.createdAt).takeIf { spoken != null }, durationWords(capsule.durationMs)).joinToString(" \u00B7 "),
+                    style = EchoType.caption, color = c.textSecondary, maxLines = 1)
             }
-            Text(conditionLabel(capsule, today), style = EchoType.body, color = statusColor, maxLines = 1)
+            StatusTag(status, statusLabel(capsule, today))
             if (!selecting) {
                 Spacer(Modifier.width(24.dp))
-                Icon(
-                    when { playing -> Icons.Outlined.Stop; open -> Icons.Outlined.PlayArrow; else -> Icons.Outlined.Lock },
-                    contentDescription = if (playing) "멈추기" else if (open) "듣기" else "봉인됨",
-                    tint = if (waiting) c.accent else c.text,
-                    modifier = Modifier.size(44.dp),
-                )
+                Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) {
+                    when {
+                        playing -> Icon(Icons.Filled.Stop, "멈추기", tint = c.text, modifier = Modifier.size(44.dp))
+                        !locked -> Icon(Icons.Outlined.PlayArrow, "듣기", tint = if (status == CapsuleStatus.NEW) c.accent else c.text, modifier = Modifier.size(44.dp))
+                    }
+                }
             }
         }
         if (playing) {
+            capsule.visibleTranscript(today)?.let {
+                Text(it, style = EchoType.body, color = c.text, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = Gutter + 170.dp, end = Gutter, bottom = 20.dp))
+            }
             Box(Modifier.fillMaxWidth().height(6.dp).background(c.hairline)) {
                 Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(6.dp).background(c.accent))
             }
         }
+    }
+}
+
+@Composable
+private fun StatusTag(status: CapsuleStatus, label: String) {
+    val c = Echo.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        when (status) {
+            CapsuleStatus.LOCKED_DATE, CapsuleStatus.LOCKED_PLACE ->
+                Icon(Icons.Outlined.Lock, "잠김", tint = c.textSecondary, modifier = Modifier.size(36.dp))
+            CapsuleStatus.NEW -> Box(Modifier.size(16.dp).clip(CircleShape).background(c.accent))
+            else -> Unit
+        }
+        val color = when (status) {
+            CapsuleStatus.NEW -> c.accent
+            CapsuleStatus.LOCKED_PLACE -> c.state
+            CapsuleStatus.LOCKED_DATE -> c.text
+            else -> c.textSecondary
+        }
+        Text(label, style = EchoType.body, color = color, maxLines = 1)
     }
 }

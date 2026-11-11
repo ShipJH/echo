@@ -15,7 +15,8 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.eco.capsule.GeoPoint
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.withTimeout
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -44,27 +45,42 @@ class PleosLocation(context: Context) {
         if (!initialized) { sdk.initialize(); initialized = true }
     }
 
-    /** 마지막 위치가 없으면 첫 위치 수신까지 기다린다. */
-    suspend fun current(timeoutMs: Long = 8_000): GeoPoint = withTimeout(timeoutMs) {
+    /**
+     * 마지막 위치가 없거나 오래됐으면 첫 위치 수신까지 기다린다. 시간 안에 못 받으면 일반 예외로 실패한다.
+     * withTimeout 의 TimeoutCancellationException 은 취소로 취급돼, 취소를 다시 던지는 호출부에서
+     * 실패 처리 없이 코루틴이 조용히 끝났다(화면이 '확인 중' 에 멈추고 지오펜스 등록도 건너뜀, 2026-11-11).
+     */
+    suspend fun current(timeoutMs: Long = 8_000): GeoPoint {
         ensureInitialized()
-        lastKnown() ?: firstFix()
+        return withTimeoutOrNull(timeoutMs) { lastKnown() ?: firstFix() }
+            ?: throw IllegalStateException("${timeoutMs}ms 안에 위치를 받지 못함")
     }
 
+    /**
+     * 마지막 위치가 [MAX_AGE_MS] 보다 오래됐으면 버린다. 오래된 위치로 봉인 지점이나 '떠남' 을 판정하면
+     * 떠난 적 없이 열릴 수 있다. timestampMillis 가 벽시계가 아니라면 항상 버려지고 firstFix 로 넘어간다.
+     */
     private suspend fun lastKnown(): GeoPoint? = suspendCancellableCoroutine { cont ->
+        val once = AtomicBoolean(false)
         sdk.getLastKnownLocation(object : FusedLocationListener {
-            override fun onChanged(location: LocationData?) { if (cont.isActive) cont.resume(location?.toPoint()) }
-            override fun onError(exception: Exception) { if (cont.isActive) cont.resumeWithException(exception) }
+            override fun onChanged(location: LocationData?) {
+                val fresh = location?.takeIf { System.currentTimeMillis() - it.timestampMillis <= MAX_AGE_MS }
+                if (once.compareAndSet(false, true)) cont.resume(fresh?.toPoint())
+            }
+            override fun onError(exception: Exception) { if (once.compareAndSet(false, true)) cont.resumeWithException(exception) }
         })
     }
 
+    // 콜백은 바인더 스레드 여러 개에서 올 수 있어 isActive 확인만으로는 두 번 resume 될 수 있다. AtomicBoolean 으로 한 번만.
     private suspend fun firstFix(): GeoPoint = suspendCancellableCoroutine { cont ->
+        val once = AtomicBoolean(false)
         val listener = object : FusedLocationListener {
             override fun onChanged(location: LocationData?) {
-                if (location == null || !cont.isActive) return
+                if (location == null || !once.compareAndSet(false, true)) return
                 main.post { runCatching { sdk.unregisterFusedLocationCallback(this) } }
                 cont.resume(location.toPoint())
             }
-            override fun onError(exception: Exception) { if (cont.isActive) cont.resumeWithException(exception) }
+            override fun onError(exception: Exception) { if (once.compareAndSet(false, true)) cont.resumeWithException(exception) }
         }
         sdk.registerFusedLocationCallback(listener)
         cont.invokeOnCancellation { main.post { runCatching { sdk.unregisterFusedLocationCallback(listener) } } }
@@ -109,6 +125,7 @@ class PleosLocation(context: Context) {
         // runtime 의존성으로만 끌어와 컴파일 시점에 보이지 않는다.
         const val PERMISSION: String = "pleos.car.permission.FUSED_LOCATION"
         private const val TAG = "EchoLocation"
+        private const val MAX_AGE_MS = 2 * 60_000L
     }
 }
 

@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.eco.capsule.wavDurationMs
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -26,17 +27,20 @@ class AudioEngine(context: Context) {
     private val disposed = AtomicBoolean(false)
 
     init {
-        // 엔진이 새로 뜰 때는 진행 중인 녹음이 없다. 이전 실행이 봉인 전에 끝나며 남긴 임시 파일을 지운다.
+        // 엔진이 새로 뜰 때는 진행 중인 녹음이 없다. 이전 실행이 잠그기 전에 끝나며 남긴 임시 파일을 지운다.
         cacheDir.listFiles { f -> f.name.startsWith("echo-recording-") }?.forEach { stale ->
             if (!stale.delete()) Log.w(TAG, "임시 녹음 파일을 지우지 못함: ${stale.name}")
         }
     }
 
     private var recorder: PcmRecorder? = null
+    private var output: File? = null
     private var player: MediaPlayer? = null
 
     var busy by mutableStateOf(false); private set
     var recording by mutableStateOf(false); private set
+    /** 녹음 도중 입력이 끊겼다. 그때까지의 녹음은 파일에 남아 있다. */
+    var interrupted by mutableStateOf(false); private set
     /** 재생 중인 파일. 없으면 null. */
     var playing by mutableStateOf<File?>(null); private set
     var level by mutableFloatStateOf(0f); private set
@@ -45,10 +49,16 @@ class AudioEngine(context: Context) {
     private var startedAt = 0L
     val elapsedMs: Long get() = if (recording) SystemClock.elapsedRealtime() - startedAt else 0L
 
+    /** release 뒤에는 실행기가 닫혀 execute 가 RejectedExecutionException 을 던진다. 그 전에 거른다. */
+    private fun post(task: () -> Unit) {
+        if (!disposed.get()) worker.execute(task)
+    }
+
+    /** 사용자 조작 하나. 앞 작업이 끝나기 전 연타는 버린다. */
     private fun run(action: () -> Unit) {
         if (busy || disposed.get()) return
         busy = true
-        worker.execute {
+        post {
             try {
                 if (!disposed.get()) action()
             } catch (error: Exception) {
@@ -60,51 +70,61 @@ class AudioEngine(context: Context) {
     }
 
     fun startRecording(onStarted: (File) -> Unit, onFailed: (String) -> Unit) = run {
-        val output = File.createTempFile("echo-recording-", ".wav", cacheDir)
-        val candidate = PcmRecorder(output)
+        // 재생 중이던 녹음이 스피커로 나오면 새 녹음에 섞인다.
+        releasePlayer()
+        val file = File.createTempFile("echo-recording-", ".wav", cacheDir)
+        val candidate = PcmRecorder(file)
         try {
             candidate.start()
             recorder = candidate
-            main.post { startedAt = SystemClock.elapsedRealtime(); recording = true; onStarted(output) }
+            output = file
+            main.post { startedAt = SystemClock.elapsedRealtime(); interrupted = false; recording = true; onStarted(file) }
         } catch (error: Exception) {
             Log.e(TAG, "마이크 녹음을 시작하지 못함", error)
             runCatching { candidate.release() }
-            output.delete()
-            val message = when {
-                error is SecurityException -> "마이크 권한을 허용한 뒤 다시 눌러 주세요."
-                error.message?.contains("start failed", ignoreCase = true) == true -> "오디오 서비스가 녹음을 시작하지 못했어요. 잠시 후 다시 시도해 주세요."
-                else -> "녹음을 시작하지 못했어요. 에뮬레이터의 마이크 설정을 확인해 주세요."
-            }
+            file.delete()
+            val message = if (error is SecurityException) "마이크 권한을 허용한 뒤 다시 눌러 주세요."
+            else "녹음을 시작하지 못했어요. 잠시 후 다시 눌러 주세요."
             main.post { onFailed(message) }
         }
     }
 
-    fun stopRecording(onStopped: () -> Unit, onFailed: (String) -> Unit) = run {
+    /** 입력이 끊겼어도 1초 이상 남아 있으면 [onStopped] 에 partial=true 로 넘긴다. */
+    fun stopRecording(onStopped: (partial: Boolean) -> Unit, onFailed: (String) -> Unit) = run {
         val active = recorder ?: return@run
+        val file = output
         try {
             active.stop()
-            main.post { recording = false; level = 0f; onStopped() }
+            main.post { recording = false; level = 0f; onStopped(false) }
         } catch (error: RuntimeException) {
-            main.post { recording = false; level = 0f; onFailed("녹음 입력이 중단되었거나 너무 짧아요. 다시 시도해 주세요.") }
+            // PcmRecorder 는 실패해도 finally 에서 WAV 헤더를 써 둔다. 쓸 만큼 남았으면 살린다.
+            val usable = file != null && wavDurationMs(file) >= 1_000
+            Log.e(TAG, "녹음 종료 중 실패, 남은 녹음 ${if (usable) "사용" else "폐기"}", error)
+            main.post {
+                recording = false; level = 0f
+                if (usable) onStopped(true) else onFailed("녹음이 끊겼거나 너무 짧아요. 다시 녹음해 주세요.")
+            }
         } finally {
             active.release()
             recorder = null
+            output = null
         }
     }
 
-    /** 녹음 중 최근 피크. 화면이 주기적으로 읽는다. */
+    /** 녹음 중 최근 피크와 입력 끊김. 화면이 주기적으로 읽는다. */
     fun sampleLevel() {
         val active = recorder ?: return
-        worker.execute {
+        post {
             val raw = runCatching { active.maxAmplitude }.getOrDefault(0)
-            main.post { level = (raw / 32767f).coerceIn(0f, 1f) }
+            val failed = active.failure != null
+            main.post { level = (raw / 32767f).coerceIn(0f, 1f); if (failed) interrupted = true }
         }
     }
 
     fun samplePosition() {
         val active = player ?: return
-        worker.execute {
-            val position = runCatching { active.currentPosition }.getOrNull() ?: return@execute
+        post {
+            val position = runCatching { active.currentPosition }.getOrNull() ?: return@post
             main.post { positionMs = position }
         }
     }
@@ -117,9 +137,7 @@ class AudioEngine(context: Context) {
         val media = MediaPlayer()
         try {
             media.setDataSource(file.absolutePath)
-            media.setOnCompletionListener { done ->
-                worker.execute { if (player === done) releasePlayer() else done.release() }
-            }
+            media.setOnCompletionListener { done -> post { if (player === done) releasePlayer() else done.release() } }
             media.prepare()
             media.start()
             player = media
@@ -128,11 +146,12 @@ class AudioEngine(context: Context) {
         } catch (error: Exception) {
             media.release()
             Log.e(TAG, "재생 실패 ${file.name}", error)
-            main.post { onFailed("녹음 파일을 재생하지 못했어요.") }
+            main.post { onFailed("재생하지 못했어요.") }
         }
     }
 
-    fun stopPlayback() = run { releasePlayer() }
+    /** 화면을 떠날 때 부른다. 다른 작업 중이어도 버려지지 않도록 busy 를 거치지 않고 줄 세운다. */
+    fun stopPlayback() = post { releasePlayer() }
 
     private fun releasePlayer() {
         val active = player ?: return

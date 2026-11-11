@@ -32,8 +32,17 @@ data class Capsule(
      * 장소 반경을 처음 벗어난 시각. 녹음한 자리에서 바로 열리지 않도록 '떠났다가 돌아옴' 을 요구한다.
      */
     val leftAt: Long? = null,
+    /**
+     * 받아쓴 문장. null 이면 아직 받아쓰지 않았고, "" 이면 받아썼지만 말이 없었다.
+     * 잠긴 녹음의 내용이 미리 보이지 않도록 화면에는 열린 뒤에만 보인다([visibleTranscript]).
+     */
+    val transcript: String? = null,
+    /** 조건을 기다리지 않고 '지금 열기' 한 시각. 원래 조건(날짜·장소)은 그대로 남긴다. */
+    val openedEarlyAt: Long? = null,
 ) {
-    fun isUnlocked(today: LocalDate): Boolean = when (condition) {
+    fun visibleTranscript(today: LocalDate): String? = transcript?.takeIf { it.isNotBlank() && isUnlocked(today) }
+
+    fun isUnlocked(today: LocalDate): Boolean = openedEarlyAt != null || when (condition) {
         is UnlockCondition.OnDate -> !today.isBefore(condition.date)
         is UnlockCondition.AtPlace -> arrivedAt != null
         UnlockCondition.Anytime -> true

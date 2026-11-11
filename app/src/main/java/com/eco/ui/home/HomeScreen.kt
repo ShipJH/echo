@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,10 +16,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,7 +36,10 @@ import com.eco.ui.components.ScreenHeader
 import com.eco.ui.components.Tile
 import com.eco.ui.components.TouchMin
 import com.eco.ui.components.VLine
-import com.eco.ui.format.formatDuration
+import com.eco.ui.components.WaveformView
+import com.eco.ui.components.rememberPeaks
+import com.eco.ui.format.durationWords
+import com.eco.ui.format.headline
 import com.eco.ui.format.koreanDate
 import com.eco.ui.format.shortDate
 import com.eco.ui.format.timeOfDay
@@ -44,6 +48,10 @@ import com.eco.ui.theme.Echo
 import com.eco.ui.theme.EchoType
 import java.time.LocalDate
 
+/**
+ * 홈의 중심은 '지금 열린 녹음' 이다. 그래서 넓은 창에서 그 칸을 2/3, 녹음하기를 1/3 로 둔다.
+ * 목록 줄을 누르면 [onOpen] 으로 넘기고, 잠긴 녹음인지는 부르는 쪽이 판단한다.
+ */
 @Composable
 fun HomeScreen(
     capsules: List<Capsule>,
@@ -51,49 +59,59 @@ fun HomeScreen(
     playingFile: String?,
     progress: Float,
     onRecord: () -> Unit,
-    onPlay: (Capsule) -> Unit,
+    onOpen: (Capsule) -> Unit,
     onShowStory: () -> Unit,
+    fileOf: (Capsule) -> java.io.File,
+    voice: @Composable RowScope.() -> Unit = {},
 ) {
-    val waiting = capsules.filter { it.isWaiting(today) }
+    // 재생을 시작하면 '들었음' 이 바로 기록된다. 듣는 동안 칸이 다른 내용으로 바뀌지 않도록 재생 중인 녹음을 붙잡아 둔다.
+    val playingCapsule = capsules.firstOrNull { it.fileName == playingFile && it.condition != UnlockCondition.Anytime && it.isUnlocked(today) }
+    val waiting = listOfNotNull(playingCapsule) + capsules.filter { it.isWaiting(today) && it.fileName != playingFile }
     val next = capsules.filter { !it.isUnlocked(today) && it.condition is UnlockCondition.OnDate }
         .minByOrNull { (it.condition as UnlockCondition.OnDate).date }
     val title = when {
-        waiting.size == 1 -> "열린 기억이 하나 있어요"
-        waiting.size > 1 -> "열린 기억이 ${waiting.size}개 있어요"
-        capsules.isEmpty() -> "이 차에 첫 목소리를 남겨 보세요"
-        else -> "오늘의 목소리를 남겨 보세요"
+        playingCapsule != null -> "재생 중"
+        waiting.isNotEmpty() -> "새로 열린 녹음 ${waiting.size}개"
+        capsules.isEmpty() -> "첫 녹음을 남겨 보세요"
+        else -> "새로 열린 녹음 없음"
     }
     val c = Echo.colors
     BoxWithConstraints(Modifier.fillMaxSize().background(c.background)) {
         val wide = maxWidth >= 1000.dp
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             // 주행 상태(CarUxRestrictions)는 아직 받지 않으므로 '정차 중' 같은 문구를 붙이지 않는다.
-            ScreenHeader(title, context = todayLine(today))
+            ScreenHeader(title, context = todayLine(today), trailing = voice)
             HLine()
             val first = waiting.firstOrNull()
-            val left: @Composable (Modifier) -> Unit = { m ->
+            val memory: @Composable (Modifier) -> Unit = { m ->
                 when {
                     first != null -> Tile(
-                        icon = if (playingFile == first.fileName) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
-                        title = waitingTitle(first, today),
-                        status = "${koreanDate(first.createdAt.toLocalDate())} · ${formatDuration(first.durationMs)}",
-                        onClick = { onPlay(first) }, modifier = m, marker = c.accent,
+                        icon = if (playingFile == first.fileName) Icons.Filled.Stop else Icons.Outlined.PlayArrow,
+                        title = openedTitle(first, today),
+                        status = first.visibleTranscript(today)?.let { "\u201C${headline(it, 40)}\u201D" }
+                            ?: "${koreanDate(first.createdAt.toLocalDate())} · ${durationWords(first.durationMs)}",
+                        onClick = { onOpen(first) }, modifier = m, marker = c.accent,
+                        bottom = {
+                            val isPlaying = playingFile == first.fileName
+                            WaveformView(rememberPeaks(fileOf(first)), color = if (isPlaying) c.hint else c.accent, played = c.accent,
+                                progress = if (isPlaying) progress else 0f, modifier = Modifier.fillMaxWidth().height(72.dp))
+                        },
                     )
-                    next != null -> Tile(Icons.Outlined.HourglassEmpty, "다음 기억은 ${shortDate((next.condition as UnlockCondition.OnDate).date)}에 열려요",
-                        "${koreanDate(next.createdAt.toLocalDate())}에 남긴 기억", onShowStory, m)
-                    else -> Tile(Icons.Outlined.HourglassEmpty, "남긴 목소리는 정한 날, 정한 곳에서 다시 열려요",
-                        "날짜 · 장소 · 조건 없이 중에서 고를 수 있어요", onRecord, m)
+                    next != null -> Tile(Icons.Outlined.HourglassEmpty, "다음 녹음은 ${shortDate((next.condition as UnlockCondition.OnDate).date)}에 열려요",
+                        "${koreanDate(next.createdAt.toLocalDate())}의 녹음", onShowStory, m)
+                    else -> Tile(Icons.Outlined.HourglassEmpty, "녹음을 잠가 두면 정한 날이나 다시 온 곳에서 열려요",
+                        "잠그지 않고 보관할 수도 있어요", onRecord, m)
                 }
             }
-            val right: @Composable (Modifier) -> Unit = { m ->
-                Tile(Icons.Outlined.Mic, "기억 남기기", "버튼을 누르면 녹음을 시작해요", onRecord, m, inverted = true)
+            val record: @Composable (Modifier) -> Unit = { m ->
+                Tile(Icons.Outlined.Mic, "녹음하기", "누르면 바로 시작해요", onRecord, m, action = true)
             }
             if (wide) {
-                Row(Modifier.fillMaxWidth().height(340.dp)) {
-                    left(Modifier.weight(1f).fillMaxHeight()); VLine(); right(Modifier.weight(1f).fillMaxHeight())
+                Row(Modifier.fillMaxWidth().height(360.dp)) {
+                    memory(Modifier.weight(2f).fillMaxHeight()); VLine(); record(Modifier.weight(1f).fillMaxHeight())
                 }
             } else {
-                left(Modifier.fillMaxWidth().height(300.dp)); HLine(); right(Modifier.fillMaxWidth().height(300.dp))
+                memory(Modifier.fillMaxWidth().height(300.dp)); HLine(); record(Modifier.fillMaxWidth().height(300.dp))
             }
             HLine()
             if (capsules.isNotEmpty()) {
@@ -101,13 +119,13 @@ fun HomeScreen(
                     Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onShowStory).padding(start = Gutter, end = 16.dp).height(TouchMin),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("최근 남긴 기억", style = EchoType.title, color = c.text, modifier = Modifier.weight(1f))
+                    Text("최근 녹음", style = EchoType.title, color = c.text, modifier = Modifier.weight(1f))
                     Text("전체 보기", style = EchoType.caption, color = c.textSecondary)
                     Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = c.textSecondary, modifier = Modifier.padding(start = 4.dp))
                 }
                 HLine()
                 capsules.take(4).forEach { capsule ->
-                    CapsuleRow(capsule, today, playingFile == capsule.fileName, progress, onClick = { onPlay(capsule) })
+                    CapsuleRow(capsule, today, playingFile == capsule.fileName, progress, onClick = { onOpen(capsule) })
                     HLine()
                 }
             }
@@ -116,11 +134,10 @@ fun HomeScreen(
     }
 }
 
-private fun waitingTitle(capsule: Capsule, today: LocalDate): String = when (val c = capsule.condition) {
-    is UnlockCondition.OnDate -> {
-        val years = capsule.createdAt.toLocalDate().until(today).years
-        if (years >= 1 && c.date == today) "${years}년 전 오늘 남긴 기억" else "${timeOfDay(capsule.createdAt)}에 남긴 기억이 열렸어요"
-    }
-    is UnlockCondition.AtPlace -> "이곳에서 남긴 기억이 열렸어요"
-    UnlockCondition.Anytime -> "남긴 기억"
+/** 이 칸은 그 장소를 떠난 뒤에도 보이므로 '이곳' 같은 말을 쓰지 않는다. */
+private fun openedTitle(capsule: Capsule, today: LocalDate): String {
+    val years = capsule.createdAt.toLocalDate().until(today).years
+    val anniversary = capsule.condition is UnlockCondition.OnDate && years >= 1 &&
+        capsule.createdAt.monthValue == today.monthValue && capsule.createdAt.dayOfMonth == today.dayOfMonth
+    return if (anniversary) "${years}년 전 오늘의 녹음" else "${timeOfDay(capsule.createdAt)} 녹음이 열렸어요"
 }
