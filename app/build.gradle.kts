@@ -25,9 +25,13 @@ android {
 
     buildTypes {
         release {
+            // packageScope 로 최적화 범위를 androidx/kotlin 으로 좁히면 범위 안에서 이름이 바뀐 Kotlin 내부 클래스를
+            // 범위 밖 클래스가 상속해 시작 즉시 IllegalAccessError 로 죽었다(2026-11-11). 앱 전체를 최적화한다.
             optimization {
                 enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
+                keepRules {
+                    files.add(file("proguard-rules.pro"))
+                }
             }
         }
     }
