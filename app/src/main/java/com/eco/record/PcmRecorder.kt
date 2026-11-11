@@ -1,4 +1,4 @@
-package com.eco.ui.home
+package com.eco.record
 
 import android.media.AudioFormat
 import android.media.AudioRecord

@@ -1,0 +1,126 @@
+package com.eco.capsule
+
+import android.content.Context
+import java.io.File
+import java.io.RandomAccessFile
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
+
+/**
+ * 음성은 filesDir/echo-<epochMillis>.wav, 메타데이터는 SharedPreferences("capsules") 의
+ * `meta:<파일명>` 에 둔다. 파일이 기준이고 메타가 없는 파일은 '조건 없이 보관' 으로 본다.
+ */
+class CapsuleStore(context: Context) {
+    private val dir = context.filesDir
+    private val prefs = context.getSharedPreferences("capsules", Context.MODE_PRIVATE)
+
+    fun load(): List<Capsule> {
+        migrateLegacy()
+        return dir.listFiles().orEmpty()
+            .filter { it.name.startsWith("echo-") && it.extension == "wav" }
+            .map { file ->
+                val meta = prefs.getString(key(file.name), null)?.let(CapsuleCodec::decode)
+                    ?: CapsuleCodec.Meta(UnlockCondition.Anytime)
+                Capsule(file.name, createdAt(file), wavDurationMs(file), meta.condition, meta.openedAt, meta.arrivedAt, meta.recordedPlace, meta.leftAt)
+            }
+            .sortedByDescending { it.createdAt }
+    }
+
+    fun file(capsule: Capsule): File = File(dir, capsule.fileName)
+
+    /** 녹음 임시 파일을 보관함으로 옮긴다. 메타 저장에 실패하면 옮긴 파일을 되돌린다. */
+    fun seal(recording: File, condition: UnlockCondition, recordedPlace: GeoPoint?): Capsule {
+        val destination = File(dir, "echo-${System.currentTimeMillis()}.wav")
+        check(recording.renameTo(destination)) { "녹음 파일을 보관함으로 옮기지 못했습니다" }
+        val written = prefs.edit().putString(key(destination.name), CapsuleCodec.encode(CapsuleCodec.Meta(condition, recordedPlace = recordedPlace))).commit()
+        if (!written) {
+            destination.renameTo(recording)
+            error("캡슐 정보를 저장하지 못했습니다")
+        }
+        return load().first { it.fileName == destination.name }
+    }
+
+    fun markOpened(capsule: Capsule, now: Long = System.currentTimeMillis()) =
+        update(capsule) { it.copy(openedAt = it.openedAt ?: now) }
+
+    /** 반경을 벗어났다. 이미 기록돼 있으면 그대로 둔다. */
+    fun markLeft(fileName: String, now: Long = System.currentTimeMillis()) {
+        val capsule = load().firstOrNull { it.fileName == fileName } ?: return
+        if (capsule.leftAt == null) update(capsule) { it.copy(leftAt = now) }
+    }
+
+    /** 반경에 들어왔다. 한 번 떠난 뒤가 아니면 무시하고 false 를 돌려준다. */
+    fun markArrived(fileName: String, now: Long = System.currentTimeMillis()): Boolean {
+        val capsule = load().firstOrNull { it.fileName == fileName } ?: return false
+        if (capsule.leftAt == null || capsule.arrivedAt != null) return false
+        update(capsule) { it.copy(arrivedAt = now) }
+        return true
+    }
+
+    /** 봉인 중인 기억을 지금 연다. 조건을 '조건 없이' 로 바꾸지 않고 충족 시각만 기록한다. */
+    fun openEarly(capsule: Capsule, today: LocalDate = LocalDate.now()) = update(capsule) {
+        when (val c = it.condition) {
+            is UnlockCondition.OnDate -> it.copy(condition = UnlockCondition.OnDate(minOf(c.date, today)))
+            is UnlockCondition.AtPlace -> it.copy(arrivedAt = it.arrivedAt ?: System.currentTimeMillis())
+            UnlockCondition.Anytime -> it
+        }
+    }
+
+    /** 실패한 파일 이름을 돌려준다. */
+    fun delete(fileNames: Collection<String>): List<String> {
+        val editor = prefs.edit()
+        val failed = fileNames.filter { name ->
+            val file = File(dir, name)
+            val removed = !file.exists() || file.delete()
+            if (removed) editor.remove(key(name))
+            !removed
+        }
+        editor.apply()
+        return failed
+    }
+
+    private fun update(capsule: Capsule, change: (CapsuleCodec.Meta) -> CapsuleCodec.Meta) {
+        val current = CapsuleCodec.Meta(capsule.condition, capsule.openedAt, capsule.arrivedAt, capsule.recordedPlace, capsule.leftAt)
+        check(prefs.edit().putString(key(capsule.fileName), CapsuleCodec.encode(change(current))).commit()) { "캡슐 정보를 저장하지 못했습니다" }
+    }
+
+    /**
+     * 2026-11-08 이전 빌드는 `<파일명>=yyyy-MM-dd`, `opened:<파일명>=true` 로 저장했다.
+     * 한 번 읽어 새 형식으로 옮기고 옛 키를 지운다.
+     */
+    private fun migrateLegacy() {
+        val legacy = prefs.all.filterKeys { it.startsWith("echo-") && it.endsWith(".wav") }
+        if (legacy.isEmpty()) return
+        val editor = prefs.edit()
+        legacy.forEach { (name, value) ->
+            val date = (value as? String)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            if (date != null && !prefs.contains(key(name))) {
+                val opened = if (prefs.getBoolean("opened:$name", false)) File(dir, name).lastModified() else null
+                editor.putString(key(name), CapsuleCodec.encode(CapsuleCodec.Meta(UnlockCondition.OnDate(date), opened)))
+            }
+            editor.remove(name).remove("opened:$name")
+        }
+        check(editor.commit()) { "옛 캡슐 정보를 옮기지 못했습니다" }
+    }
+
+    private fun key(fileName: String) = "meta:$fileName"
+
+    private fun createdAt(file: File): LocalDateTime {
+        val millis = file.nameWithoutExtension.removePrefix("echo-").toLongOrNull() ?: file.lastModified()
+        return LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
+    }
+}
+
+/** WAV 헤더의 byteRate(오프셋 28)로 길이를 계산한다. 녹음 형식이 바뀌어도 맞게. */
+fun wavDurationMs(file: File): Long {
+    if (file.length() <= 44) return 0
+    return RandomAccessFile(file, "r").use { input ->
+        input.seek(28)
+        val b = ByteArray(4).also(input::readFully)
+        val byteRate = (b[0].toLong() and 0xFF) or ((b[1].toLong() and 0xFF) shl 8) or
+            ((b[2].toLong() and 0xFF) shl 16) or ((b[3].toLong() and 0xFF) shl 24)
+        if (byteRate <= 0) 0 else (file.length() - 44) * 1000 / byteRate
+    }
+}

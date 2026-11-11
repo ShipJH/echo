@@ -5,16 +5,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.eco.speech.*
-import com.eco.ui.components.EchoHeader
-import com.eco.ui.components.TopTabs
+import com.eco.ui.components.BlockButton
+import com.eco.ui.components.Gutter
+import com.eco.ui.components.HLine
+import com.eco.ui.components.ScreenHeader
 import com.eco.ui.theme.*
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -35,7 +35,7 @@ private class TestDisplay {
 }
 
 @Composable
-fun SttTestScreen(onCreate: () -> Unit, onMyCapsules: () -> Unit) {
+fun SttTestScreen() {
     val context = LocalContext.current
     val direct = remember { TestDisplay() }
     val wake = remember { TestDisplay() }
@@ -147,39 +147,43 @@ fun SttTestScreen(onCreate: () -> Unit, onMyCapsules: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(EchoBackground)) {
-        EchoHeader()
-        TopTabs(2) { if (it == 0) onCreate() else if (it == 1) onMyCapsules() }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            TestPanel("음성 명령 테스트", "말한 명령을 바로 판별합니다. 로그: eco-stt-test", direct, mode == TestMode.DIRECT,
+    Column(Modifier.fillMaxSize().background(Echo.colors.background)) {
+        ScreenHeader("STT 테스트", context = "디버그 빌드에서만 보입니다 · 로그: eco-stt-test")
+        HLine()
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            TestPanel("음성 명령 테스트", "말한 명령을 바로 판별합니다.", direct, mode == TestMode.DIRECT,
                 { start(TestMode.DIRECT) }, { direct.status = "중지됨"; mode = null })
-            TestPanel("에코야 인식 테스트", "에코야 → 네? → 다음 명령. 로그: eco-stt-test", wake, mode == TestMode.WAKE,
+            HLine()
+            TestPanel("에코야 인식 테스트", "에코야 → 네? → 다음 명령.", wake, mode == TestMode.WAKE,
                 { start(TestMode.WAKE) }, { wake.status = "중지됨"; mode = null; awaitingCommand = false })
-            Text("실제 기능은 실행하지 않고 콘솔에만 처리 로그를 출력합니다.", color = EchoMuted, fontSize = 20.sp)
+            HLine()
+            Text("실제 기능은 실행하지 않고 콘솔에만 처리 로그를 출력합니다.", style = EchoType.caption, color = Echo.colors.textSecondary,
+                modifier = Modifier.padding(Gutter))
         }
     }
 }
 
 @Composable
 private fun TestPanel(title: String, description: String, display: TestDisplay, active: Boolean, onStart: () -> Unit, onStop: () -> Unit) {
-    Column(Modifier.fillMaxWidth().background(EchoSurface).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(title, color = EchoText, fontSize = 30.sp)
-        Text(description, color = EchoMuted, fontSize = 20.sp)
-        Text(display.status, color = EchoAccent, fontSize = 24.sp)
-        Text(display.text.ifEmpty { "인식된 음성이 여기에 표시됩니다." }, color = EchoText, fontSize = 28.sp)
-        if (display.command.isNotEmpty()) Text(display.command, color = EchoMuted, fontSize = 24.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(enabled = !active, onClick = onStart) { Text("스타트", fontSize = 24.sp) }
-            Button(enabled = active, onClick = onStop) { Text("중지", fontSize = 24.sp) }
+    val c = Echo.colors
+    Column(Modifier.fillMaxWidth().padding(Gutter), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(title, style = EchoType.title, color = c.text)
+        Text(description, style = EchoType.caption, color = c.textSecondary)
+        Text(display.status, style = EchoType.body, color = c.state)
+        Text(display.text.ifEmpty { "인식된 음성이 여기에 표시됩니다." }, style = EchoType.body, color = c.text)
+        if (display.command.isNotEmpty()) Text(display.command, style = EchoType.caption, color = c.textSecondary)
+        Row(Modifier.fillMaxWidth()) {
+            BlockButton("시작", onStart, Modifier.weight(1f), primary = true, enabled = !active)
+            BlockButton("중지", onStop, Modifier.weight(1f), enabled = active)
+            BlockButton("로그 지우기", { display.console = emptyList() }, Modifier.weight(1f))
         }
-        Text("테스트 콘솔 · 최신순", color = EchoText, fontSize = 24.sp)
-        Button(onClick = { display.console = emptyList() }) { Text("로그 지우기", fontSize = 20.sp) }
+        Text("테스트 콘솔 · 최신순", style = EchoType.caption, color = c.textSecondary)
         SelectionContainer {
             Column(Modifier.fillMaxWidth().heightIn(max = 280.dp)
-                .background(EchoBackground).verticalScroll(rememberScrollState()).padding(16.dp),
+                .background(c.tile).verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (display.console.isEmpty()) Text("인식된 말과 처리 결과가 여기에 표시됩니다.", color = EchoMuted, fontSize = 20.sp)
-                display.console.forEach { Text(it, color = EchoText, fontSize = 20.sp) }
+                if (display.console.isEmpty()) Text("인식된 말과 처리 결과가 여기에 표시됩니다.", style = EchoType.caption, color = c.textSecondary)
+                display.console.forEach { Text(it, style = EchoType.caption, color = c.text) }
             }
         }
     }
