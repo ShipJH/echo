@@ -77,4 +77,25 @@ class CapsuleTest {
         assertEquals(LocalDate.of(2029, 11, 4), unlockDate(LocalDate.of(2026, 11, 4), DateUnit.YEARS, 3))
         assertEquals(LocalDate.of(2027, 1, 4), unlockDate(LocalDate.of(2026, 11, 4), DateUnit.MONTHS, 2))
     }
+
+    @Test fun leaveDistanceKeepsMarginBeyondRadius() {
+        assertEquals(600f, UnlockCondition.AtPlace(0.0, 0.0, 100f).leaveMeters)
+        assertEquals(800f, UnlockCondition.AtPlace(0.0, 0.0, 300f).leaveMeters)
+        assertEquals(2000f, UnlockCondition.AtPlace(0.0, 0.0, 1000f).leaveMeters)
+    }
+
+    @Test fun readingIgnoresTheBandBetweenRadiusAndLeaveDistance() {
+        val place = UnlockCondition.AtPlace(37.5665, 126.9780, 300f) // 떠남 800m
+        assertEquals(PlaceReading.INSIDE, place.read(37.5683, 126.9780)) // 약 200m
+        assertEquals(PlaceReading.NEAR, place.read(37.5715, 126.9780))   // 약 556m: 반경 밖이지만 떠난 것은 아니다
+        assertEquals(PlaceReading.AWAY, place.read(37.5745, 126.9780))   // 약 890m
+    }
+
+    @Test fun arrivalNeedsTenMinutesAway() {
+        val left = 1_000_000L
+        assertEquals(Arrival.NOT_LEFT, arrival(leftAt = null, arrivedAt = null, now = left))
+        assertEquals(Arrival.TOO_SOON, arrival(left, null, left + MIN_AWAY_MS - 1)) // GPS 가 튀었다 돌아온 것
+        assertEquals(Arrival.OPEN, arrival(left, null, left + MIN_AWAY_MS))
+        assertEquals(Arrival.ALREADY, arrival(left, arrivedAt = left + 1, now = left + MIN_AWAY_MS))
+    }
 }

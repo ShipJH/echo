@@ -30,6 +30,21 @@ class PcmTest {
         header.putShort(1).putShort(1).putInt(48_000).putInt(96_000).putShort(2).putShort(16)
         header.put("data".toByteArray()).putInt(data.size)
         val file = File.createTempFile("pcm-test", ".wav").apply { writeBytes(header.array() + data); deleteOnExit() }
-        assertEquals(4, wavToStt(file).size) // 6샘플 → 2샘플 → 4바이트
+        val chunks = mutableListOf<ByteArray>()
+        assertEquals(4L, streamWavToStt(file, chunk = 2) { chunks += it; true }) // 6샘플 → 2샘플 → 4바이트
+        assertEquals(listOf(2, 2), chunks.map { it.size }) // 16k 1샘플씩 나눠 보낸다
+        assertArrayEquals(pcm(20, 50), chunks.reduce(ByteArray::plus))
+    }
+
+    @Test fun stopsWhenSenderRefuses() {
+        val data = pcm(1, 1, 1, 2, 2, 2, 3, 3, 3)
+        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+        header.put("RIFF".toByteArray()).putInt(36 + data.size).put("WAVEfmt ".toByteArray()).putInt(16)
+        header.putShort(1).putShort(1).putInt(48_000).putInt(96_000).putShort(2).putShort(16)
+        header.put("data".toByteArray()).putInt(data.size)
+        val file = File.createTempFile("pcm-test", ".wav").apply { writeBytes(header.array() + data); deleteOnExit() }
+        var calls = 0
+        assertEquals(2L, streamWavToStt(file, chunk = 2) { calls++; false })
+        assertEquals(1, calls)
     }
 }

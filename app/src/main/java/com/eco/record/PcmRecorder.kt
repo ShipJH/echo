@@ -1,5 +1,6 @@
 package com.eco.record
 
+import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -19,8 +20,11 @@ internal class PcmRecorder(private val output: File) {
         private set
     private val peak = AtomicInteger(0)
     val maxAmplitude: Int get() = peak.getAndSet(0)
-    private val rate = 48000
+    private val rate = RATE
 
+    // 권한은 부르는 쪽(EchoApp.record)이 확인하고, 그 사이 권한이 꺼져 나는 SecurityException 은
+    // AudioEngine.startRecording 이 잡아 "마이크 권한을 허용한 뒤…" 로 알린다. lint 는 클래스 너머를 보지 못한다.
+    @SuppressLint("MissingPermission")
     fun start() {
         Log.i("EchoRecording", "PCM create: MIC, mono, 48000 Hz, PCM16")
         val minimum = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -61,12 +65,7 @@ internal class PcmRecorder(private val output: File) {
                             countBytes += count * 2
                         }
                     } finally {
-                        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
-                        header.put("RIFF".toByteArray()).putInt(36 + countBytes)
-                        header.put("WAVEfmt ".toByteArray()).putInt(16)
-                        header.putShort(1).putShort(1).putInt(rate).putInt(rate * 2)
-                        header.putShort(2).putShort(16).put("data".toByteArray()).putInt(countBytes)
-                        file.seek(0); file.write(header.array())
+                        writeWavHeader(file, countBytes, rate)
                         Log.i("EchoRecording", "PCM file finalized: $countBytes bytes")
                     }
                 }
@@ -87,6 +86,8 @@ internal class PcmRecorder(private val output: File) {
         check(output.length() > 44) { "No audio samples received" }
     }
 
+    companion object { const val RATE = 48_000 }
+
     fun release() {
         running = false
         capture?.join()
@@ -94,4 +95,14 @@ internal class PcmRecorder(private val output: File) {
         input?.release()
         input = null
     }
+}
+
+/** PCM16 mono WAV 헤더(44바이트)를 파일 앞에 쓴다. 녹음을 끝낼 때와, 끝내지 못한 녹음을 되살릴 때. */
+internal fun writeWavHeader(file: RandomAccessFile, dataBytes: Int, rate: Int) {
+    val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+    header.put("RIFF".toByteArray()).putInt(36 + dataBytes)
+    header.put("WAVEfmt ".toByteArray()).putInt(16)
+    header.putShort(1).putShort(1).putInt(rate).putInt(rate * 2)
+    header.putShort(2).putShort(16).put("data".toByteArray()).putInt(dataBytes)
+    file.seek(0); file.write(header.array())
 }

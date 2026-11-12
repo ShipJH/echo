@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -59,7 +60,7 @@ fun CapsuleRow(
     val c = Echo.colors
     val status = capsule.status(today)
     val locked = status == CapsuleStatus.LOCKED_DATE || status == CapsuleStatus.LOCKED_PLACE
-    Column(Modifier.fillMaxWidth().background(if (playing) c.tile else c.background).clickable(role = Role.Button, onClick = onClick)) {
+    Column(Modifier.fillMaxWidth().background(if (playing || checked) c.tile else c.background).clickable(role = Role.Button, onClick = onClick)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 120.dp).padding(horizontal = Gutter, vertical = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             if (selecting) {
                 Box(Modifier.size(44.dp).border(2.dp, c.text).background(if (checked) c.inverse else c.background), contentAlignment = Alignment.Center) {
@@ -111,14 +112,11 @@ private fun StatusTag(status: CapsuleStatus, label: String) {
             CapsuleStatus.LOCKED_DATE, CapsuleStatus.LOCKED_PLACE ->
                 Icon(Icons.Outlined.Lock, "잠김", tint = c.textSecondary, modifier = Modifier.size(36.dp))
             CapsuleStatus.NEW -> Box(Modifier.size(16.dp).clip(CircleShape).background(c.accent))
+            CapsuleStatus.KEPT -> Icon(Icons.Outlined.Archive, "보관", tint = c.textSecondary, modifier = Modifier.size(36.dp))
             else -> Unit
         }
-        val color = when (status) {
-            CapsuleStatus.NEW -> c.accent
-            CapsuleStatus.LOCKED_PLACE -> c.state
-            CapsuleStatus.LOCKED_DATE -> c.text
-            else -> c.textSecondary
-        }
+        // 색은 지금 할 일이 있는 '새로 열림' 에만 쓴다. 날짜 잠김이 가장 진하고 장소 잠김 파랑이 링크처럼 보였다(2026-11-12 디자인 리뷰).
+        val color = if (status == CapsuleStatus.NEW) c.accent else c.textSecondary
         Text(label, style = EchoType.body, color = color, maxLines = 1)
     }
 }

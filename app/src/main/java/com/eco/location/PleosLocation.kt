@@ -87,12 +87,17 @@ class PleosLocation(context: Context) {
     }
 
     /**
-     * 장소 캡슐마다 지오펜스를 건다. 앱 프로세스가 살아 있는 동안만 유효하다고 보고,
+     * 장소 캡슐마다 지오펜스를 두 개 건다: 들어옴은 [enterMeters] 반경의 ENTER, 떠남은 그보다 넓은 [leaveMeters] 반경의
+     * EXIT. 반경 하나로 둘 다 받으면 경계에서 GPS 가 흔들릴 때 떠남이 찍혔다. 앱 프로세스가 살아 있는 동안만 유효하다고 보고,
      * 앱을 다시 열 때는 [current] 로 한 번 더 판정한다.
      */
-    fun watch(fileName: String, place: GeoPoint, radiusMeters: Float, onEnter: (String) -> Unit, onExit: (String) -> Unit, onError: (Exception) -> Unit) {
+    fun watch(fileName: String, place: GeoPoint, enterMeters: Float, leaveMeters: Float, onEnter: (String) -> Unit, onExit: (String) -> Unit, onError: (Exception) -> Unit) {
         ensureInitialized()
-        val request = ProximityAlertRequest(place.latitude, place.longitude, radiusMeters, setOf(ProximityTransition.ENTER, ProximityTransition.EXIT))
+        alert(fileName, ProximityAlertRequest(place.latitude, place.longitude, enterMeters, setOf(ProximityTransition.ENTER)), onEnter, onExit, onError)
+        alert(fileName, ProximityAlertRequest(place.latitude, place.longitude, leaveMeters, setOf(ProximityTransition.EXIT)), onEnter, onExit, onError)
+    }
+
+    private fun alert(fileName: String, request: ProximityAlertRequest, onEnter: (String) -> Unit, onExit: (String) -> Unit, onError: (Exception) -> Unit) {
         sdk.addProximityAlert(request, object : ProximityAlertListener {
             override fun onRegistered(alertId: String) { main.post { alerts[alertId] = fileName } }
             override fun onTransition(event: ProximityAlertEvent) {

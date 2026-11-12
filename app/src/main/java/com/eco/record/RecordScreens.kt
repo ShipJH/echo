@@ -105,12 +105,15 @@ fun RecordingScreen(engine: AudioEngine, onFinish: () -> Unit) {
             LevelBars(bars, Modifier.fillMaxWidth(0.6f).height(120.dp))
             Spacer(Modifier.height(24.dp))
             Text(
-                if (engine.interrupted) "마이크 입력이 끊겼어요. 끊기기 전까지 녹음된 부분은 남아 있어요." else "다 말했으면 아래 버튼을 누르세요.",
+                if (engine.interrupted) "마이크가 끊겼어요. 끊기기 전까지 녹음됐어요" else "다 말했으면 녹음 끝내기를 눌러 주세요",
                 style = EchoType.body, color = if (engine.interrupted) c.text else c.textSecondary, textAlign = TextAlign.Center,
             )
+            Spacer(Modifier.height(48.dp))
+            // 이 화면의 유일한 행동이라 주요 버튼으로 둔다. 전체 폭 반전 막대는 Night 에서 눈부셔 되돌린 적이 있어(2026-11-11)
+            // 가운데 블록으로만 반전한다. Night 녹음 화면의 밝은 면은 0.5% 라 블록 하나는 여유가 있다(2026-11-12 디자인 리뷰 실측).
+            BlockButton("녹음 끝내기", onFinish, Modifier.width(560.dp).heightIn(min = 120.dp), primary = true,
+                icon = Icons.Filled.Stop, iconTint = c.recording, enabled = !engine.busy)
         }
-        // 반전 막대 대신 surface_high 위 빨간 정지 아이콘. Night 에서 전체 폭 밝은 면이 눈부셨다.
-        BlockButton("녹음 끝내기", onFinish, Modifier.fillMaxWidth(), icon = Icons.Filled.Stop, iconTint = c.recording, enabled = !engine.busy)
     }
 }
 
@@ -163,11 +166,14 @@ class SealState(val today: LocalDate = LocalDate.now()) {
     var radius by mutableIntStateOf(1)
     var spokenDate by mutableStateOf<LocalDate?>(null)
     var confirmDiscard by mutableStateOf(false)
+    /** 이 화면에서 조건을 한 번이라도 골랐다(터치든 말이든). "응" 같은 짧은 대답은 그 뒤에만 잠그기로 친다. */
+    var picked by mutableStateOf(false)
 
     val date: LocalDate get() = spokenDate ?: if (custom) unlockDate(today, unit, amount) else presets[preset].let { unlockDate(today, it.unit, it.amount) }
 
     /** 말로 고른 날짜. 프리셋과 같으면 그 칸을 고른 것으로 보인다. */
     fun chooseDate(date: LocalDate) {
+        picked = true
         kind = ConditionKind.DATE
         val match = presets.indexOfFirst { unlockDate(today, it.unit, it.amount) == date }
         if (match >= 0) { preset = match; custom = false; spokenDate = null } else { spokenDate = date; custom = false }
@@ -205,14 +211,15 @@ fun SealScreen(
         ScreenHeader("언제 다시 들을까요?", context = "방금 녹음 · ${durationWords(durationMs)}", trailing = voice)
         HLine()
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            ConditionRow(Icons.Outlined.CalendarToday, "정한 날에", "${koreanDate(s.date)}에 열려요", s.kind == ConditionKind.DATE, { s.kind = ConditionKind.DATE }) {
+            ConditionRow(Icons.Outlined.CalendarToday, "정한 날에", "${koreanDate(s.date)}에 열려요", s.kind == ConditionKind.DATE, { s.picked = true; s.kind = ConditionKind.DATE }) {
                 val selected = when { s.spokenDate != null -> -1; s.custom -> presets.size; else -> s.preset }
                 Segmented(presets.map { it.label } + "직접 설정", selected, {
+                    s.picked = true
                     s.spokenDate = null
                     if (it == presets.size) s.custom = true else { s.custom = false; s.preset = it }
                 }, Modifier.fillMaxWidth())
                 if (s.spokenDate != null) Text("말로 정한 날 · ${koreanDate(s.spokenDate!!)}", style = EchoType.title, color = c.text)
-                else if (s.custom) CustomDate(s.unit, s.amount, { s.unit = it; s.amount = s.amount.coerceIn(1, amountLimit(it)) }, { s.amount = it })
+                else if (s.custom) CustomDate(s.unit, s.amount, { s.picked = true; s.unit = it; s.amount = s.amount.coerceIn(1, amountLimit(it)) }, { s.picked = true; s.amount = it })
             }
             HLine()
             val placeStatus = when (place) {
@@ -220,25 +227,28 @@ fun SealScreen(
                 PlaceState.Locating -> "현재 위치 확인 중…"
                 // 좌표는 운전자에게 의미가 없어 보여 주지 않는다. '떠났다가 돌아와야' 열리는 조건을 문장에 담는다.
                 is PlaceState.Ready -> "여기를 떠났다가 ${radii[s.radius].second} 안으로 돌아오면 열려요"
-                is PlaceState.Unavailable -> if (place.retryable) "${place.reason} · 누르면 다시 시도" else place.reason
+                is PlaceState.Unavailable -> if (place.retryable) "${place.reason}. 누르면 다시 찾아요" else place.reason
             }
             ConditionRow(Icons.Outlined.Place, "여기 다시 오면", placeStatus, s.kind == ConditionKind.PLACE, {
+                s.picked = true
                 s.kind = ConditionKind.PLACE
                 // 거부·실패 뒤에도 다시 누르면 요청한다. 이미 허용돼 있으면 시스템이 바로 허용으로 돌려주고 위치를 다시 받는다.
                 if (place == PlaceState.NeedsPermission || (place is PlaceState.Unavailable && place.retryable)) onRequestPlace()
             }) {
-                if (place is PlaceState.Ready) Segmented(radii.map { it.second }, s.radius, { s.radius = it }, Modifier.widthIn(max = 600.dp).fillMaxWidth())
+                if (place is PlaceState.Ready) Segmented(radii.map { it.second }, s.radius, { s.picked = true; s.radius = it }, Modifier.widthIn(max = 600.dp).fillMaxWidth())
             }
             HLine()
-            ConditionRow(Icons.Outlined.Archive, "언제든", "잠그지 않고 이 차의 이야기에 보관해요", s.kind == ConditionKind.ANYTIME, { s.kind = ConditionKind.ANYTIME })
+            ConditionRow(Icons.Outlined.Archive, "언제든", "잠그지 않고 이 차의 이야기에 보관해요", s.kind == ConditionKind.ANYTIME, { s.picked = true; s.kind = ConditionKind.ANYTIME })
             HLine()
-            // 비어 있던 아래쪽에 방금 녹음의 실제 파형을 둔다. 들어보는 동안 재생된 부분이 틸색으로 찬다.
-            val listening = engine.playing == previewFile
-            Column(Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("방금 녹음", style = EchoType.caption, color = c.textSecondary)
+            // 방금 녹음의 실제 파형과 들어보기를 한자리에 둔다. 들어보는 동안 재생된 부분이 틸색으로 찬다.
+            val previewing = engine.playing == previewFile
+            Row(Modifier.fillMaxWidth().padding(horizontal = Gutter, vertical = 28.dp), verticalAlignment = Alignment.CenterVertically) {
+                BlockButton(if (previewing) "멈추기" else "들어보기", { engine.toggle(previewFile, onFailed = onError) }, Modifier.width(300.dp),
+                    icon = if (previewing) Icons.Filled.Stop else Icons.Outlined.PlayArrow, enabled = !engine.busy)
+                Spacer(Modifier.width(32.dp))
                 WaveformView(rememberPeaks(previewFile, buckets = 96), color = c.hint, played = c.accent,
-                    progress = if (listening && engine.durationMs > 0) engine.positionMs / engine.durationMs.toFloat() else 0f,
-                    modifier = Modifier.fillMaxWidth().height(120.dp))
+                    progress = if (previewing && engine.durationMs > 0) engine.positionMs / engine.durationMs.toFloat() else 0f,
+                    modifier = Modifier.weight(1f).height(120.dp))
             }
         }
         HLine()
@@ -246,9 +256,6 @@ fun SealScreen(
         val condition = s.condition(place)
         Row(Modifier.fillMaxWidth()) {
             BlockButton("버리기", { s.confirmDiscard = true }, Modifier.weight(1f), icon = Icons.Outlined.Delete, enabled = !engine.busy)
-            VLine(Modifier.height(104.dp))
-            BlockButton(if (previewing) "멈추기" else "들어보기", { engine.toggle(previewFile, onFailed = onError) }, Modifier.weight(1f),
-                icon = if (previewing) Icons.Filled.Stop else Icons.Outlined.PlayArrow, enabled = !engine.busy)
             BlockButton(if (s.kind == ConditionKind.ANYTIME) "보관하기" else "잠그기", {
                 if (previewing) engine.stopPlayback()
                 condition?.let(onSeal)
@@ -258,7 +265,7 @@ fun SealScreen(
     }
 
     if (s.confirmDiscard) {
-        SystemPopup("녹음을 버릴까요?", "버리면 되돌릴 수 없어요.", "버리기",
+        SystemPopup("녹음을 버릴까요?", "버리면 되돌릴 수 없어요", "버리기",
             onConfirm = { s.confirmDiscard = false; onDiscard() }, onDismiss = { s.confirmDiscard = false })
     }
 }

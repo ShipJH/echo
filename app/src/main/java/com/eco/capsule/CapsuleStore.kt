@@ -1,6 +1,7 @@
 package com.eco.capsule
 
 import android.content.Context
+import android.util.Log
 import java.io.File
 import java.io.RandomAccessFile
 import java.time.Instant
@@ -16,16 +17,30 @@ class CapsuleStore(context: Context) {
     private val dir = context.filesDir
     private val prefs = context.getSharedPreferences("capsules", Context.MODE_PRIVATE)
 
+    /**
+     * 정보를 읽지 못한 녹음의 파일 이름. 목록에서 뺀다: '보관' 으로 보이면 잠긴 녹음이 그대로 들린다.
+     * 예전에는 한 항목만 망가져도 load 전체가 던져 앱이 시작할 때마다 죽었다(2026-11-12 리뷰).
+     */
+    var unreadable: List<String> = emptyList(); private set
+
     fun load(): List<Capsule> {
         migrateLegacy()
+        val broken = mutableListOf<String>()
         return dir.listFiles().orEmpty()
             .filter { it.name.startsWith("echo-") && it.extension == "wav" }
-            .map { file ->
-                val meta = prefs.getString(key(file.name), null)?.let(CapsuleCodec::decode)
-                    ?: CapsuleCodec.Meta(UnlockCondition.Anytime)
-                Capsule(file.name, createdAt(file), wavDurationMs(file), meta.condition, meta.openedAt, meta.arrivedAt, meta.recordedPlace, meta.leftAt, meta.transcript, meta.openedEarlyAt)
+            .mapNotNull { file ->
+                try {
+                    val meta = prefs.getString(key(file.name), null)?.let(CapsuleCodec::decode)
+                        ?: CapsuleCodec.Meta(UnlockCondition.Anytime)
+                    Capsule(file.name, createdAt(file), wavDurationMs(file), meta.condition, meta.openedAt, meta.arrivedAt, meta.recordedPlace, meta.leftAt, meta.transcript, meta.openedEarlyAt)
+                } catch (error: Exception) {
+                    Log.e("EchoStore", "녹음 정보를 읽지 못함: ${file.name}", error)
+                    broken += file.name
+                    null
+                }
             }
             .sortedByDescending { it.createdAt }
+            .also { unreadable = broken }
     }
 
     fun file(capsule: Capsule): File = File(dir, capsule.fileName)
@@ -51,12 +66,14 @@ class CapsuleStore(context: Context) {
     fun markLeft(fileName: String, now: Long = System.currentTimeMillis()) =
         update(fileName) { if (it.leftAt == null) it.copy(leftAt = now) else it }
 
-    /** 반경에 들어왔다. 한 번 떠난 뒤가 아니면 무시하고 false 를 돌려준다. */
+    /** 반경에 들어왔다. 떠났다가 충분히 지나 돌아온 것이면 열고 true. 금방 돌아왔으면 떠남 기록을 지운다([arrival]). */
     fun markArrived(fileName: String, now: Long = System.currentTimeMillis()): Boolean {
         val meta = read(fileName) ?: return false
-        if (meta.leftAt == null || meta.arrivedAt != null) return false
-        update(fileName) { it.copy(arrivedAt = now) }
-        return true
+        return when (arrival(meta.leftAt, meta.arrivedAt, now)) {
+            Arrival.OPEN -> { update(fileName) { it.copy(arrivedAt = now) }; true }
+            Arrival.TOO_SOON -> { Log.i("EchoStore", "떠난 지 얼마 안 돼 다녀온 것으로 치지 않음: $fileName"); update(fileName) { it.copy(leftAt = null) }; false }
+            Arrival.NOT_LEFT, Arrival.ALREADY -> false
+        }
     }
 
     /**
@@ -86,6 +103,8 @@ class CapsuleStore(context: Context) {
      * 화면을 다시 읽지 않는 갱신을 모르기 때문에, 그것으로 덮어쓰면 leftAt 이 지워진다(2026-11-11 리뷰).
      */
     private fun update(fileName: String, change: (CapsuleCodec.Meta) -> CapsuleCodec.Meta) {
+        // 지운 녹음에 늦게 온 지오펜스·받아쓰기 결과가 메타만 다시 만들었다.
+        if (!File(dir, fileName).exists()) { Log.w("EchoStore", "없는 녹음이라 갱신하지 않음: $fileName"); return }
         val current = read(fileName) ?: CapsuleCodec.Meta(UnlockCondition.Anytime)
         val next = change(current)
         if (next == current) return
