@@ -72,7 +72,7 @@ fun HomeScreen(
     val title = when {
         playingCapsule != null -> "재생 중"
         waiting.isNotEmpty() -> "새로 열린 녹음 ${waiting.size}개"
-        capsules.isEmpty() -> "첫 녹음을 남겨 보세요"
+        capsules.isEmpty() -> "아직 녹음 없음"
         else -> "새로 열린 녹음 없음"
     }
     val c = Echo.colors
@@ -89,18 +89,19 @@ fun HomeScreen(
                         icon = if (playingFile == first.fileName) Icons.Filled.Stop else Icons.Outlined.PlayArrow,
                         title = openedTitle(first, today),
                         status = first.visibleTranscript(today)?.let { "\u201C${headline(it, 40)}\u201D" }
-                            ?: "${koreanDate(first.createdAt.toLocalDate())} · ${durationWords(first.durationMs)}",
-                        onClick = { onOpen(first) }, modifier = m, marker = c.accent,
+                            ?: "${timeOfDay(first.createdAt)} · ${durationWords(first.durationMs)}",
+                        onClick = { onOpen(first) }, modifier = m, marker = c.accent, action = true, actionFill = c.accent,
                         bottom = {
                             val isPlaying = playingFile == first.fileName
                             WaveformView(rememberPeaks(fileOf(first)), color = if (isPlaying) c.hint else c.accent, played = c.accent,
                                 progress = if (isPlaying) progress else 0f, modifier = Modifier.fillMaxWidth().height(72.dp))
                         },
                     )
-                    next != null -> Tile(Icons.Outlined.HourglassEmpty, "다음 녹음은 ${shortDate((next.condition as UnlockCondition.OnDate).date)}에 열려요",
-                        "${koreanDate(next.createdAt.toLocalDate())}의 녹음", onShowStory, m)
-                    else -> Tile(Icons.Outlined.HourglassEmpty, "녹음을 잠가 두면 정한 날이나 다시 온 곳에서 열려요",
-                        "잠그지 않고 보관할 수도 있어요", onRecord, m)
+                    next != null -> Tile(Icons.Outlined.HourglassEmpty, "${koreanDate((next.condition as UnlockCondition.OnDate).date)}에 열려요",
+                        "${koreanDate(next.createdAt.toLocalDate())}에 잠근 녹음", onShowStory, m)
+                    // 설명 칸이다. 누르면 녹음이 시작되던 것은 놀랍다(2026-11-12 디자인 리뷰). 녹음은 옆 칸에서만.
+                    else -> Tile(Icons.Outlined.HourglassEmpty, "잠근 녹음은 정한 날이나 그 자리에서 열려요",
+                        "잠그지 않고 보관할 수도 있어요", null, m)
                 }
             }
             val record: @Composable (Modifier) -> Unit = { m ->
@@ -139,5 +140,11 @@ private fun openedTitle(capsule: Capsule, today: LocalDate): String {
     val years = capsule.createdAt.toLocalDate().until(today).years
     val anniversary = capsule.condition is UnlockCondition.OnDate && years >= 1 &&
         capsule.createdAt.monthValue == today.monthValue && capsule.createdAt.dayOfMonth == today.dayOfMonth
-    return if (anniversary) "${years}년 전 오늘의 녹음" else "${timeOfDay(capsule.createdAt)} 녹음이 열렸어요"
+    // 머리가 이미 "새로 열린 녹음 N개" 라 여기서 '열렸어요' 를 되풀이하지 않는다. "오전 11:37 녹음이 열렸어요" 는 11:37 에 열린 것으로 읽혔다.
+    val day = capsule.createdAt.toLocalDate()
+    return when {
+        anniversary -> "${years}년 전 오늘 녹음"
+        day.year == today.year -> "${day.monthValue}월 ${day.dayOfMonth}일 녹음"
+        else -> "${koreanDate(day)} 녹음"
+    }
 }

@@ -152,13 +152,20 @@ fun BlockButton(
 
 /** 머리 오른쪽의 작은 버튼(선택·취소). 글자만 두면 버튼으로 보이지 않아 타일 바탕을 깐다. */
 @Composable
-fun SmallButton(label: String, onClick: () -> Unit, color: Color? = null) {
-    Box(
+fun SmallButton(label: String, onClick: () -> Unit, color: Color? = null, icon: ImageVector? = null) {
+    Row(
         Modifier.heightIn(min = TouchMin).widthIn(min = 140.dp).background(Echo.colors.tile)
             .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 28.dp),
-        contentAlignment = Alignment.Center,
-    ) { Text(label, style = EchoType.label, color = color ?: Echo.colors.text, maxLines = 1) }
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) Icon(icon, null, tint = color ?: Echo.colors.text, modifier = Modifier.size(36.dp))
+        Text(label, style = EchoType.label, color = color ?: Echo.colors.text, maxLines = 1)
+    }
 }
+
+/** 아래 버튼 줄(BlockButton) 높이. 띠·토스트를 그 위에 띄울 때 쓴다. */
+val BOTTOM_BAR = 104.dp
 
 /** 화면 머리: 위에 맥락 한 줄(회색), 아래 제목. 뒤로 가기가 있으면 왼쪽에 둔다. */
 @Composable
@@ -191,19 +198,20 @@ fun Tile(
     icon: ImageVector,
     title: String,
     status: String?,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     action: Boolean = false,
+    actionFill: Color? = null,
     marker: Color? = null,
     bottom: (@Composable () -> Unit)? = null,
 ) {
     val c = Echo.colors
-    Row(modifier.clickable(role = Role.Button, onClick = onClick)) {
+    Row(if (onClick != null) modifier.clickable(role = Role.Button, onClick = onClick) else modifier) {
         if (marker != null) Box(Modifier.width(8.dp).fillMaxHeight().background(marker))
         Column(Modifier.weight(1f).padding(Gutter), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (action) {
-                Box(Modifier.size(88.dp).background(c.inverse), contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = c.onInverse, modifier = Modifier.size(48.dp))
+                Box(Modifier.size(88.dp).background(actionFill ?: c.inverse), contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = if (actionFill != null) c.background else c.onInverse, modifier = Modifier.size(48.dp))
                 }
             } else {
                 Icon(icon, contentDescription = null, tint = marker ?: c.text, modifier = Modifier.size(56.dp))
@@ -229,16 +237,19 @@ fun SystemPopup(
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Echo.colors.scrim).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {
-            Column(Modifier.widthIn(max = 880.dp).fillMaxWidth(0.8f).background(Echo.colors.background).clickable(enabled = false) {}) {
+            // Night 에서 대화상자 바탕과 스크림이 거의 같아 경계가 흐렸다. 1px 선을 두른다.
+            Column(Modifier.widthIn(max = 880.dp).fillMaxWidth(0.8f).background(Echo.colors.background).border(1.dp, Echo.colors.controlLine)
+                .clickable(enabled = false) {}) {
                 Column(Modifier.padding(horizontal = 48.dp, vertical = 44.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text(title, style = EchoType.title, color = Echo.colors.text, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     if (description != null) Text(description, style = EchoType.body, color = Echo.colors.textSecondary,
                         textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     content()
                 }
+                // 이 앱의 팝업은 모두 되돌릴 수 없는 일(지금 열기·버리기·삭제)을 묻는다. 확인 쪽을 반전해 더 눌리게 두지 않는다.
                 Row(Modifier.fillMaxWidth()) {
-                    if (dismissLabel != null) BlockButton(dismissLabel, onDismiss, Modifier.weight(1f))
-                    BlockButton(confirmLabel, onConfirm, Modifier.weight(1f), primary = true)
+                    if (dismissLabel != null) { BlockButton(dismissLabel, onDismiss, Modifier.weight(1f)); VLine(Modifier.height(104.dp)) }
+                    BlockButton(confirmLabel, onConfirm, Modifier.weight(1f))
                 }
             }
         }

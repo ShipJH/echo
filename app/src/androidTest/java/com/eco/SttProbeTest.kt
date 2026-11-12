@@ -6,7 +6,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.eco.speech.SpeechService
 import com.eco.speech.parseVoiceIntent
-import com.eco.speech.wavToStt
+import com.eco.speech.VoiceScreen
+import com.eco.capsule.wavDurationMs
 import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -42,19 +43,18 @@ class SttProbeTest {
     private fun transcribe(name: String, pauseMs: Long): String {
         val file = File(instrumentation.targetContext.cacheDir, name)
         instrumentation.context.assets.open("stt/$name").use { input -> file.outputStream().use { input.copyTo(it) } }
-        val pcm = wavToStt(file)
         val done = CountDownLatch(1)
         var text: String? = null
         var error: String? = null
         val started = SystemClock.elapsedRealtime()
         instrumentation.runOnMainSync {
-            val accepted = speech.transcribe(pcm, onResult = { text = it; done.countDown() }, onError = { error = it; done.countDown() }, pauseMs = pauseMs)
+            val accepted = speech.transcribe(file, onResult = { text = it; done.countDown() }, onError = { error = it; done.countDown() }, pauseMs = pauseMs)
             check(accepted) { "transcribe 거부됨: ${speech.state}" }
         }
         assertTrue("60초 안에 끝나지 않음", done.await(60, TimeUnit.SECONDS))
         val elapsed = SystemClock.elapsedRealtime() - started
-        val audioMs = pcm.size / 32
-        Log.i(tag, "$name pause=${pauseMs}ms audio=${audioMs}ms took=${elapsed}ms text=[$text] error=$error intent=${text?.let { parseVoiceIntent(it, LocalDate.now()) }}")
+        val audioMs = wavDurationMs(file)
+        Log.i(tag, "$name pause=${pauseMs}ms audio=${audioMs}ms took=${elapsed}ms text=[$text] error=$error intent=${text?.let { parseVoiceIntent(it, LocalDate.now(), VoiceScreen.SEAL) }}")
         assertTrue("오류: $error", error == null)
         return text.orEmpty()
     }
