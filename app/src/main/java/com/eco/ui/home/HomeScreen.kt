@@ -99,8 +99,8 @@ fun HomeScreen(
                     )
                     next != null -> Tile(Icons.Outlined.HourglassEmpty, "다음 녹음은 ${shortDate((next.condition as UnlockCondition.OnDate).date)}에 열려요",
                         "${koreanDate(next.createdAt.toLocalDate())}의 녹음", onShowStory, m)
-                    else -> Tile(Icons.Outlined.HourglassEmpty, "녹음을 잠가 두면 정한 날이나 다시 온 곳에서 열려요",
-                        "잠그지 않고 보관할 수도 있어요", onRecord, m)
+                    else -> Tile(Icons.Outlined.HourglassEmpty, "녹음을 시작해 보세요.",
+                        "타임캡슐처럼 녹음을 활용해보세요. 잠그지 않아도 돼요.", onRecord, m)
                 }
             }
             val record: @Composable (Modifier) -> Unit = { m ->
