@@ -6,7 +6,6 @@
 
 ---
 [기획서](https://github.com/ShipJH/echo/blob/main/[%EC%B0%A8%EB%9F%89%EC%9A%A9%20%EC%95%B1%20%EA%B0%9C%EB%B0%9C%20%EA%B3%B5%EB%AA%A8%EC%A0%84]%EB%8F%84%EC%A0%84%ED%95%98%EB%8A%94%EC%B2%AD%EB%85%84%EB%93%A4-%EA%B8%B0%ED%9A%8D%EC%84%9C.zip)  
-
 [apk 파일](https://github.com/ShipJH/echo/blob/main/app-debug.zip)  
 
 
