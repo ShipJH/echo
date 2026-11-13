@@ -1,4 +1,4 @@
-﻿# ECHO (에코) — Hyundai Pleos Connect 차량용 음성 타임캡슐 앱 개발 프롬프트
+﻿# ECHO (에코) — Hyundai Pleos Connect 차량용 음성 타임캡슐
 
 ECO와 ECHO 의 어원 잘 찾아서 의미있게 변형.
 
