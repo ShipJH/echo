@@ -168,8 +168,7 @@ Flutter는 향후 연계 가능성을 열어 두되, 차량용 SDK 및 플랫폼
       사용자 의도 처리
            ↓
    녹음 / 저장 / 목록 / 재생
-           ↓
-       음성 안내(TTS)
+
 ```
 
 호출어 감지(`WakeWordEngine`), STT(`SpeechRecognitionEngine`), 명령 분석(`VoiceCommandParser`), 명령 처리(`VoiceCommandProcessor`), TTS(`SpeechSynthesisEngine`), 녹음·재생(`AudioRecorder`, `AudioPlayer`) 및 저장소(`TimeCapsuleRepository`)는 교체 가능한 인터페이스로 설계한다.
