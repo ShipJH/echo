@@ -3,6 +3,7 @@
 차량 안에서 음성을 녹음해 날짜 또는 장소 조건에 따라 다시 들을 수 있는 타임캡슐 앱입니다.
 
 ## 실행 방법
+[apk 위치](https://github.com/ShipJH/echo/tree/main/apk)
 
 1. `apk/도전하는청년들_echo_release.apk`를 Pleos Connect 환경에 설치합니다.
 2. 앱을 실행하고 화면의 음성 입력 또는 녹음 기능을 사용합니다.
