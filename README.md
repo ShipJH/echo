@@ -20,4 +20,4 @@
 
 ## APK
 
-- APK 파일 위치 또는 GitHub Release 링크: 
+- APK 파일 위치 또는 GitHub 링크: [apk 폴더](https://github.com/ShipJH/echo/tree/main/apk)
