@@ -13,7 +13,6 @@
 - Pleos Connect Emulator v2.1.0
 - Android API 34, x86_64
 - 화면: 2560×1440 가로, 160 dpi (AVD 설정 기준)
-- 보조 디스플레이 설정: 400×600, 120 dpi
 - 음성 입력 및 녹음을 위해 마이크 권한이 필요합니다.
 - 장소 기반 열기 기능을 사용하려면 Pleos 위치 권한과 에뮬레이터 위치 설정이 필요합니다.
 - Android SDK의 Pleos system image: `android-34;pleos_car_emulator;x86_64` (revision 1)
